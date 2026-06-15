@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""
+convert.py
+----------
+Offline utility to convert Zephyr Scale Excel exports to Squash TM Excel imports.
+
+Usage:
+    python convert.py --input zephyr_export.xlsx --output squash_import.xlsx --project "SquashProject"
+"""
+
+import argparse
+import os
+import re
+import sys
+import openpyxl
+from openpyxl.utils import get_column_letter
+
+# Zephyr Scale Excel header search patterns (cleaned alphanumeric lowercase)
+ZEPHYR_MAPPINGS = {
+    "key": ["key", "id", "testcasekey", "issuekey", "tcjikey", "tckey"],
+    "name": ["name", "summary", "title", "subject", "tcname"],
+    "folder": ["folder", "folderpath", "path", "tcfolder"],
+    "status": ["status", "state", "tcstatus"],
+    "priority": ["priority", "priorityname", "importance", "tcpriority"],
+    "objective": ["objective", "description", "details", "tcobjective", "tcdescription"],
+    "precondition": ["precondition", "preconditions", "prerequisites", "prerequisite", "tcprecondition"],
+    "step_action": ["testscriptstepbystepstep", "step", "stepdescription", "action", "stepaction", "stepname"],
+    "step_data": ["testscriptstepbysteptestdata", "testdata", "data", "stepdata"],
+    "step_expected": ["testscriptstepbystepexpectedresult", "expectedresult", "expected", "stepexpectedresult", "expectedresults"]
+}
+
+# Importance mapping (Zephyr -> Squash TM)
+IMPORTANCE_MAP = {
+    "low": "LOW",
+    "medium": "MEDIUM",
+    "high": "HIGH",
+    "very_high": "VERY_HIGH",
+    "critical": "VERY_HIGH",
+    "major": "HIGH",
+    "minor": "LOW"
+}
+
+# Status mapping (Zephyr -> Squash TM)
+STATUS_MAP = {
+    "approved": "APPROVED",
+    "draft": "WORK_IN_PROGRESS",
+    "underreview": "UNDER_REVISION",
+    "underrevision": "UNDER_REVISION",
+    "obsolete": "OBSOLETE"
+}
+
+def clean_header(val) -> str:
+    """Removes all non-alphanumeric characters and lowercases the string."""
+    if val is None:
+        return ""
+    return "".join(c for c in str(val).lower() if c.isalnum())
+
+def clean_html(text: str) -> str:
+    """Ensures basic formatting and safe HTML representation."""
+    if not text:
+        return ""
+    text_str = str(text).strip()
+    # If it's already HTML (starts with < and ends with >), keep it
+    if text_str.startswith("<") and text_str.endswith(">"):
+        return text_str
+    # Replace newlines with <br> and wrap in paragraphs
+    paragraphs = text_str.split("\n\n")
+    html_p = []
+    for p in paragraphs:
+        if p.strip():
+            p_formatted = p.strip().replace("\n", "<br>")
+            html_p.append(f"<p>{p_formatted}</p>")
+    return "".join(html_p) if html_p else f"<p>{text_str}</p>"
+
+def map_headers(headers: list) -> dict:
+    """Maps header values to target fields based on best substring match."""
+    mapping = {}
+    cleaned_headers = [clean_header(h) for h in headers]
+    
+    # Priority 1: Exact matches
+    for target, keywords in ZEPHYR_MAPPINGS.items():
+        for i, cleaned in enumerate(cleaned_headers):
+            if cleaned in keywords:
+                mapping[target] = i
+                
+    # Priority 2: Substring matches for unmatched targets
+    for target, keywords in ZEPHYR_MAPPINGS.items():
+        if target in mapping:
+            continue
+        for i, cleaned in enumerate(cleaned_headers):
+            if i in mapping.values():
+                continue
+            for kw in keywords:
+                if len(kw) > 3 and (kw in cleaned or cleaned in kw):
+                    mapping[target] = i
+                    break
+            if target in mapping:
+                break
+                
+    return mapping
+
+def sanitize_path(path: str) -> str:
+    """Cleans folder path, ensuring forward slashes and no duplicate slashes."""
+    if not path:
+        return ""
+    path_str = str(path).strip().replace("\\", "/")
+    # Remove leading/trailing slashes for easier split
+    path_str = path_str.strip("/")
+    parts = [p.strip() for p in path_str.split("/") if p.strip()]
+    
+    # Squash TM path escape rule: escape any '/' inside folder names
+    # Note: since we split by '/', parts won't contain '/' unless originally escaped.
+    # We join them back with '/'.
+    return "/".join(parts)
+
+def parse_zephyr_excel(file_path: str) -> list[dict]:
+    """Parses Zephyr Excel file into structured test case list."""
+    if not os.path.exists(file_path):
+        print(f"Error: Vstupní soubor '{file_path}' neexistuje.")
+        sys.exit(1)
+        
+    print(f"Načítám soubor: {file_path}")
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+    sheet = wb.active
+    print(f"Aktivní list: {sheet.title} ({sheet.max_row} řádků)")
+    
+    # Extract headers from the first row
+    headers = [cell.value for cell in sheet[1]]
+    mapping = map_headers(headers)
+    
+    print("\nDetekované mapování sloupců:")
+    for target, idx in mapping.items():
+        col_letter = get_column_letter(idx + 1)
+        print(f"  - {target:15} -> Sloupec {col_letter} ({headers[idx]})")
+        
+    # Check for mandatory columns
+    mandatory = ["name"]
+    missing = [m for m in mandatory if m not in mapping]
+    if missing:
+        print(f"\nChyba: Nepodařilo se namapovat povinná pole: {missing}")
+        print("Ujistěte se, že export ze Zephyru obsahuje správné záhlaví.")
+        sys.exit(1)
+        
+    test_cases = []
+    current_tc = None
+    
+    for row_idx in range(2, sheet.max_row + 1):
+        row = [sheet.cell(row=row_idx, column=col_idx + 1).value for col_idx in range(len(headers))]
+        
+        # Read fields
+        tc_key = str(row[mapping["key"]]).strip() if "key" in mapping and row[mapping["key"]] is not None else ""
+        tc_name = str(row[mapping["name"]]).strip() if row[mapping["name"]] is not None else ""
+        
+        # If we find a new test case key or name, we start a new test case
+        is_new_tc = False
+        if tc_name or tc_key:
+            # Check if this is truly a new test case or just duplicate row of same test case
+            if not current_tc:
+                is_new_tc = True
+            elif tc_key and tc_key != current_tc["key"]:
+                is_new_tc = True
+            elif tc_name and tc_name != current_tc["name"] and not tc_key:
+                is_new_tc = True
+                
+        if is_new_tc:
+            if current_tc:
+                test_cases.append(current_tc)
+                
+            current_tc = {
+                "key": tc_key,
+                "name": tc_name,
+                "folder": sanitize_path(row[mapping["folder"]]) if "folder" in mapping and row[mapping["folder"]] is not None else "",
+                "status": str(row[mapping["status"]]).strip() if "status" in mapping and row[mapping["status"]] is not None else "",
+                "priority": str(row[mapping["priority"]]).strip() if "priority" in mapping and row[mapping["priority"]] is not None else "",
+                "objective": str(row[mapping["objective"]]).strip() if "objective" in mapping and row[mapping["objective"]] is not None else "",
+                "precondition": str(row[mapping["precondition"]]).strip() if "precondition" in mapping and row[mapping["precondition"]] is not None else "",
+                "steps": []
+            }
+            
+        # Extract steps for current test case
+        step_act = str(row[mapping["step_action"]]).strip() if "step_action" in mapping and row[mapping["step_action"]] is not None else ""
+        step_exp = str(row[mapping["step_expected"]]).strip() if "step_expected" in mapping and row[mapping["step_expected"]] is not None else ""
+        step_dat = str(row[mapping["step_data"]]).strip() if "step_data" in mapping and row[mapping["step_data"]] is not None else ""
+        
+        # If there's step data, append it to step action to preserve it
+        if step_dat and step_act:
+            step_act = f"{step_act}\n\n[TestData: {step_dat}]"
+            
+        if current_tc and (step_act or step_exp):
+            current_tc["steps"].append({
+                "action": step_act,
+                "expected": step_exp
+            })
+            
+    # Add the last test case
+    if current_tc:
+        test_cases.append(current_tc)
+        
+    wb.close()
+    print(f"\nÚspěšně načteno {len(test_cases)} testovacích případů ze Zephyr exportu.")
+    return test_cases
+
+def write_squash_excel(test_cases: list[dict], output_path: str, project_name: str) -> None:
+    """Generates Squash TM compatible Excel import file with 5 sheets."""
+    print(f"\nVytvářím Squash TM importní soubor: {output_path}")
+    wb = openpyxl.Workbook()
+    
+    # 1. Sheet TEST_CASES
+    ws_tc = wb.active
+    ws_tc.title = "TEST_CASES"
+    tc_headers = [
+        "ACTION", "TC_PATH", "TC_NAME", "TC_REFERENCE", 
+        "TC_IMPORTANCE", "TC_STATUS", "TC_DESCRIPTION", "TC_PREREQUISITES"
+    ]
+    ws_tc.append(tc_headers)
+    
+    # 2. Sheet STEPS
+    ws_steps = wb.create_sheet(title="STEPS")
+    step_headers = ["ACTION", "TC_PATH", "TC_NAME", "STEP_ACTION", "STEP_EXPECTED_RESULT"]
+    ws_steps.append(step_headers)
+    
+    # Create empty dummy sheets to prevent Squash import errors
+    ws_params = wb.create_sheet(title="PARAMETERS")
+    ws_params.append(["ACTION", "TC_PATH", "TC_NAME", "PARAM_NAME", "PARAM_VALUE"])
+    
+    ws_datasets = wb.create_sheet(title="DATASETS")
+    ws_datasets.append(["ACTION", "TC_PATH", "TC_NAME", "DATASET_NAME", "PARAM_NAME", "PARAM_VALUE"])
+    
+    ws_links = wb.create_sheet(title="LINK_REQ_TC")
+    ws_links.append(["ACTION", "TC_PATH", "TC_NAME", "REQ_PATH", "REQ_VERSION_NUM"])
+    
+    # Map and write test cases
+    for tc in test_cases:
+        # Build Squash Path: /Project/Folder1/Folder2
+        folder_suffix = f"/{tc['folder']}" if tc['folder'] else ""
+        squash_path = f"/{project_name.strip('/')}{folder_suffix}"
+        
+        # Status Mapping
+        cleaned_status = clean_header(tc["status"])
+        squash_status = STATUS_MAP.get(cleaned_status, "UNDER_REVISION")
+        
+        # Importance Mapping
+        cleaned_priority = clean_header(tc["priority"])
+        squash_importance = IMPORTANCE_MAP.get(cleaned_priority, "MEDIUM")
+        
+        # HTML formatting for rich text fields
+        description_html = clean_html(tc["objective"])
+        precondition_html = clean_html(tc["precondition"])
+        
+        # Append to TEST_CASES sheet
+        ws_tc.append([
+            "C",                         # ACTION
+            squash_path,                 # TC_PATH
+            tc["name"],                  # TC_NAME
+            tc["key"],                   # TC_REFERENCE
+            squash_importance,           # TC_IMPORTANCE
+            squash_status,               # TC_STATUS
+            description_html,            # TC_DESCRIPTION
+            precondition_html            # TC_PREREQUISITES
+        ])
+        
+        # Append steps to STEPS sheet
+        for step in tc["steps"]:
+            ws_steps.append([
+                "C",                     # ACTION
+                squash_path,             # TC_PATH
+                tc["name"],              # TC_NAME
+                clean_html(step["action"]), # STEP_ACTION
+                clean_html(step["expected"]) # STEP_EXPECTED_RESULT
+            ])
+            
+    # Save file
+    wb.save(output_path)
+    wb.close()
+    print(f"Soubor úspěšně uložen. Obsahuje:")
+    print(f"  - {len(test_cases)} řádků v listu TEST_CASES")
+    print(f"  - {sum(len(tc['steps']) for tc in test_cases)} řádků v listu STEPS")
+
+def main():
+    parser = argparse.ArgumentParser(description="Převede export testů ze Zephyr Scale na Squash TM Excel import.")
+    parser.add_argument("-i", "--input", required=True, help="Cesta k exportovanému Excel souboru ze Zephyru (.xlsx).")
+    parser.add_argument("-o", "--output", default="squash_import.xlsx", help="Cesta pro uložení Squash TM souboru (výchozí: squash_import.xlsx).")
+    parser.add_argument("-p", "--project", default="Imported_Project", help="Název projektu ve Squash TM pro prefix složek (výchozí: Imported_Project).")
+    
+    args = parser.parse_args()
+    
+    try:
+        test_cases = parse_zephyr_excel(args.input)
+        if not test_cases:
+            print("Chyba: V souboru nebyly nalezeny žádné testovací případy.")
+            sys.exit(1)
+        write_squash_excel(test_cases, args.output, args.project)
+        print("\nHotovo! Nyní můžete vygenerovaný soubor importovat do Squash TM.")
+    except Exception as e:
+        print(f"\nNeočekávaná chyba při zpracování: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

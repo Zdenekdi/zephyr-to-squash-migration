@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zephyr-to-squash-migration"
+version = "1.0.0"
+description = "Migration tool from Zephyr Scale (Jira) to Squash TM via REST API or Excel"
+readme = "README.md"
+authors = [
+    { name = "Zdenek Dias" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "urllib3>=2.0.0",
+    "openpyxl>=3.1.0"
+]
+
+[project.gui-scripts]
+zephyr-to-squash = "gui:main"
