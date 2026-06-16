@@ -20,3 +20,6 @@ dependencies = [
 
 [project.gui-scripts]
 zephyr-to-squash = "gui:main"
+
+[tool.setuptools]
+py-modules = ["gui", "main", "api_clients", "config", "convert"]
