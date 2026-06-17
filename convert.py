@@ -302,7 +302,8 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
         print()
     return test_cases
 
-def write_squash_excel(test_cases: list[dict], output_path: str, project_name: str) -> None:
+def write_squash_excel(test_cases: list[dict], output_path: str, project_name: str,
+                       folder_name: str = "Importovane_testy") -> None:
     """Generates Squash TM compatible Excel import file.
     Column names verified against official Squash TM import template.
     """
@@ -347,9 +348,11 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         # – musí být vždy alespoň jedna podsložka (napr. /EDAZ/Importovane_testy)
         project_clean = project_name.strip("/").strip()
         if tc['folder']:
+            # Explicitní složka ze Zephyr exportu
             squash_path = f"/{project_clean}/{tc['folder']}"
         else:
-            squash_path = f"/{project_clean}/Importovane_testy"
+            # Použij nakonfigurovanou cílovou složku
+            squash_path = f"/{project_clean}/{folder_name}"
 
         # Status mapping – použij jen bezpečné hodnoty
         cleaned_status = clean_header(tc["status"])
@@ -399,18 +402,19 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
 
 def main():
     parser = argparse.ArgumentParser(description="Převede export testů ze Zephyr Scale na Squash TM Excel import.")
-    parser.add_argument("-i", "--input", required=True, help="Cesta k exportovanému Excel souboru ze Zephyru (.xlsx).")
-    parser.add_argument("-o", "--output", default="squash_import.xlsx", help="Cesta pro uložení Squash TM souboru (výchozí: squash_import.xlsx).")
-    parser.add_argument("-p", "--project", default="Imported_Project", help="Název projektu ve Squash TM pro prefix složek (výchozí: Imported_Project).")
-    
+    parser.add_argument("-i", "--input",   required=True,  help="Cesta k exportovanému Excel souboru ze Zephyru (.xlsx).")
+    parser.add_argument("-o", "--output",  default="squash_import.xlsx", help="Cesta pro uložení Squash TM souboru.")
+    parser.add_argument("-p", "--project", default="Imported_Project",   help="Název projektu ve Squash TM.")
+    parser.add_argument("-f", "--folder",  default="Importovane_testy",  help="Název cílové složky ve Squash TM (výchozí: Importovane_testy).")
+
     args = parser.parse_args()
-    
+
     try:
         test_cases = parse_zephyr_excel(args.input)
         if not test_cases:
             print("Chyba: V souboru nebyly nalezeny žádné testovací případy.")
             sys.exit(1)
-        write_squash_excel(test_cases, args.output, args.project)
+        write_squash_excel(test_cases, args.output, args.project, args.folder)
         print("\nHotovo! Nyní můžete vygenerovaný soubor importovat do Squash TM.")
     except Exception as e:
         print(f"\nNeočekávaná chyba při zpracování: {e}")

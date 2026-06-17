@@ -332,12 +332,26 @@ class MigrationGUI:
         default_proj = os.getenv("ZEPHYR_PROJECT_KEY") or "Imported_Project"
         self.entry_proj_name.insert(0, default_proj)
 
+        # Název cílové složky
+        ttk.Label(form_frame, text="Cílová složka ve Squash:").grid(
+            row=4, column=0, sticky=tk.W, pady=5)
+        self.entry_folder_name = tk.Entry(
+            form_frame, bg=BG_INPUT, fg=FG_TEXT,
+            insertbackground="#ffffff", borderwidth=0,
+            highlightthickness=1, highlightcolor=COLOR_ACCENT,
+            highlightbackground=COLOR_BORDER
+        )
+        self.entry_folder_name.grid(row=4, column=1, sticky=tk.EW, padx=10, pady=5)
+        self.entry_folder_name.insert(0, "Importovane_testy")
+        ttk.Label(form_frame, text="(složka kam půjdou testy)",
+                  foreground=FG_MUTED).grid(row=4, column=2, sticky=tk.W)
+
         # Tlačítko start
         btn_start_offline = ttk.Button(
             form_frame, text="Převést Excel soubor",
             style="Success.TButton", command=self.run_offline_conversion
         )
-        btn_start_offline.grid(row=4, column=0, columnspan=3,
+        btn_start_offline.grid(row=5, column=0, columnspan=3,
                                pady=(30, 0), sticky=tk.E)
 
     # --------------------------------------------------------------------------- #
@@ -465,6 +479,7 @@ class MigrationGUI:
         in_file = self.entry_input_file.get().strip()
         out_file = self.entry_output_file.get().strip()
         proj_name = self.entry_proj_name.get().strip()
+        folder_name = self.entry_folder_name.get().strip() or "Importovane_testy"
 
         if not in_file:
             messagebox.showerror("Chyba", "Vyberte vstupní soubor ze Zephyru.")
@@ -480,19 +495,19 @@ class MigrationGUI:
             # .exe režim: voláme parse + write přímo v threadu
             threading.Thread(
                 target=self._run_frozen_conversion,
-                args=(in_file, out_file, proj_name),
+                args=(in_file, out_file, proj_name, folder_name),
                 daemon=True
             ).start()
         else:
             # Python režim: subprocess
             cmd = [
                 sys.executable, os.path.join(self.project_dir, "convert.py"),
-                "-i", in_file, "-o", out_file, "-p", proj_name
+                "-i", in_file, "-o", out_file, "-p", proj_name, "-f", folder_name
             ]
             threading.Thread(target=self.execute_subprocess, args=(cmd,),
                              daemon=True).start()
 
-    def _run_frozen_conversion(self, in_file, out_file, proj_name):
+    def _run_frozen_conversion(self, in_file, out_file, proj_name, folder_name="Importovane_testy"):
         """Spustí konverzi přímo (frozen .exe režim) s přesměrováním výpisů."""
         import io
         old_stdout = sys.stdout
@@ -519,7 +534,7 @@ class MigrationGUI:
             if not test_cases:
                 self.log_queue.put("Chyba: V souboru nebyly nalezeny žádné testovací případy.\n")
             else:
-                _convert_module.write_squash_excel(test_cases, out_file, proj_name)
+                _convert_module.write_squash_excel(test_cases, out_file, proj_name, folder_name)
                 self.log_queue.put("\n>>> HOTOVO: Soubor uspěšně uložen.\n")
                 self.log_queue.put(f">>> Soubor: {os.path.abspath(out_file)}\n")
         except Exception as e:
