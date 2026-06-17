@@ -41,7 +41,8 @@ class MigrationGUI:
         self.log_queue = queue.Queue()
         self.running_process = None
         
-        self.env_path = os.path.join(os.getcwd(), ".env")
+        self.project_dir = os.path.dirname(os.path.abspath(__file__))
+        self.env_path = os.path.join(self.project_dir, ".env")
         load_dotenv(self.env_path)
         
         # Nastavení stylů ttk
@@ -264,7 +265,7 @@ class MigrationGUI:
         self.btn_stop.configure(state=tk.NORMAL)
         
         # Spuštění main.py jako subprocesu
-        cmd = [sys.executable, "main.py"]
+        cmd = [sys.executable, os.path.join(self.project_dir, "main.py")]
         threading.Thread(target=self.execute_subprocess, args=(cmd,), daemon=True).start()
 
     def run_offline_conversion(self):
@@ -285,7 +286,7 @@ class MigrationGUI:
         self.btn_stop.configure(state=tk.NORMAL)
         
         cmd = [
-            sys.executable, "convert.py",
+            sys.executable, os.path.join(self.project_dir, "convert.py"),
             "-i", in_file,
             "-o", out_file,
             "-p", proj_name
@@ -300,7 +301,8 @@ class MigrationGUI:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=self.project_dir
             )
             
             # Čteme výstup řádek po řádku
