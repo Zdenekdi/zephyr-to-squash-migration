@@ -208,9 +208,13 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     # 1. Sheet TEST_CASES
     ws_tc = wb.active
     ws_tc.title = "TEST_CASES"
+    # Poznámka ke sloupcům:
+    # - TC_PREREQUISITE (bez S) – správný název v Squash TM
+    # - TC_IMPORTANCE není ve všech verzích Squash TM – vynecháváme
+    # - TC_REFERENCE – referencní kód testcase (klíč ze Zephyru)
     tc_headers = [
-        "ACTION", "TC_PATH", "TC_NAME", "TC_REFERENCE", 
-        "TC_IMPORTANCE", "TC_STATUS", "TC_DESCRIPTION", "TC_PREREQUISITES"
+        "ACTION", "TC_PATH", "TC_NAME", "TC_REFERENCE",
+        "TC_STATUS", "TC_DESCRIPTION", "TC_PREREQUISITE"
     ]
     ws_tc.append(tc_headers)
     
@@ -231,32 +235,32 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     
     # Map and write test cases
     for tc in test_cases:
-        # Build Squash Path: /Project/Folder1/Folder2
-        folder_suffix = f"/{tc['folder']}" if tc['folder'] else ""
-        squash_path = f"/{project_name.strip('/')}{folder_suffix}"
-        
+        # Build Squash Path (bez úvodního lomítka, vždy s alespoň jednou podsložkou)
+        # Squash TM vyžaduje formát: NazevProjektu/Slozka
+        # Příklad: MujProjekt/Testy nebo MujProjekt/Zephyr/Import
+        project_clean = project_name.strip("/").strip()
+        if tc['folder']:
+            squash_path = f"{project_clean}/{tc['folder']}"
+        else:
+            squash_path = f"{project_clean}/Importovane_testy"
+
         # Status Mapping
         cleaned_status = clean_header(tc["status"])
-        squash_status = STATUS_MAP.get(cleaned_status, "UNDER_REVISION")
-        
-        # Importance Mapping
-        cleaned_priority = clean_header(tc["priority"])
-        squash_importance = IMPORTANCE_MAP.get(cleaned_priority, "MEDIUM")
-        
+        squash_status = STATUS_MAP.get(cleaned_status, "WORK_IN_PROGRESS")
+
         # HTML formatting for rich text fields
         description_html = clean_html(tc["objective"])
         precondition_html = clean_html(tc["precondition"])
-        
+
         # Append to TEST_CASES sheet
         ws_tc.append([
             "C",                         # ACTION
             squash_path,                 # TC_PATH
             tc["name"],                  # TC_NAME
             tc["key"],                   # TC_REFERENCE
-            squash_importance,           # TC_IMPORTANCE
             squash_status,               # TC_STATUS
             description_html,            # TC_DESCRIPTION
-            precondition_html            # TC_PREREQUISITES
+            precondition_html            # TC_PREREQUISITE
         ])
         
         # Append steps to STEPS sheet
