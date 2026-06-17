@@ -4,15 +4,15 @@ chcp 65001 > nul
 cd /d "%~dp0"
 
 echo =========================================================
-echo    Spouštím Zephyr ➔ Squash TM Migration Tool (GUI)
+echo    Spoustim Zephyr - Squash TM Migration Tool (GUI)
 echo =========================================================
 
 :: 1. Check Python installation
 where python >nul 2>nul
 if %errorlevel% neq 0 (
-    echo Chyba: Python není nainstalován v systému nebo není v PATH.
-    echo Stáhněte si jej prosím z https://www.python.org/downloads/
-    echo (Nezapomeňte při instalaci zaškrtnout "Add Python to PATH")
+    echo Chyba: Python neni nainstalovan v systemu nebo neni v PATH.
+    echo Stahnete si jej prosim z https://www.python.org/downloads/
+    echo (Nezapomente pri instalaci zaskrtnout "Add Python to PATH")
     echo.
     pause
     exit /b 1
@@ -20,10 +20,10 @@ if %errorlevel% neq 0 (
 
 :: 2. Setup virtual environment
 if not exist .venv (
-    echo Vytvářím virtuální prostředí Python (.venv)...
+    echo Vytvarim virtualni prostredi Python (.venv)...
     python -m venv .venv
     if %errorlevel% neq 0 (
-        echo Chyba při vytváření virtuálního prostředí.
+        echo Chyba pri vytvareni virtualniho prostredi.
         pause
         exit /b 1
     )
@@ -33,21 +33,21 @@ if not exist .venv (
 call .venv\Scripts\activate.bat
 
 :: 3. Install/upgrade requirements
-echo Instaluji a aktualizuji knihovny (může chvíli trvat)...
+echo Instaluji a aktualizuji knihovny (muze chvili trvat)...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo Chyba při instalaci závislostí z requirements.txt.
+    echo Chyba pri instalaci zavislosti z requirements.txt.
     pause
     exit /b 1
 )
 
 :: 4. Start GUI
-echo Spouštím grafické rozhraní...
+echo Spoustim graficke rozhrani...
 python gui.py
 
 if %errorlevel% neq 0 (
     echo.
-    echo Aplikace skončila s chybou.
+    echo Aplikace skoncila s chybou.
     pause
 )
