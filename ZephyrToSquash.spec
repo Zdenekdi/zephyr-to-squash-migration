@@ -3,27 +3,47 @@
 
 block_cipher = None
 
+# Locate tkinterdnd2 package data (TkDND native library)
+import os, sys
+try:
+    import tkinterdnd2
+    tkdnd_path = os.path.dirname(tkinterdnd2.__file__)
+    tkdnd_datas = [(tkdnd_path, 'tkinterdnd2')]
+except ImportError:
+    tkdnd_datas = []
+
 a = Analysis(
     ['gui.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[
-        ('.env.example', '.'),   # přibalíme šablonu konfigurace
-    ],
+        ('.env.example', '.'),      # šablona konfigurace
+    ] + tkdnd_datas,                # tkinterdnd2 nativní knihovny
     hiddenimports=[
+        # tkinter
         'tkinter',
         'tkinter.ttk',
         'tkinter.filedialog',
         'tkinter.messagebox',
+        # drag & drop
+        'tkinterdnd2',
+        # dotenv
         'dotenv',
+        # Excel
         'openpyxl',
         'openpyxl.styles',
         'openpyxl.utils',
+        # HTTP
         'requests',
         'urllib3',
         'charset_normalizer',
         'certifi',
         'idna',
+        # Naše vlastní moduly (volané přímo v .exe režimu)
+        'convert',
+        'main',
+        'config',
+        'api_clients',
     ],
     hookspath=[],
     hooksconfig={},

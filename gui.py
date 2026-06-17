@@ -20,8 +20,14 @@ try:
 except ImportError as e:
     print(f"CHYBA: Nepodařilo se načíst tkinter: {e}")
     print("Ujistěte se, že máte nainstalovaný Python s podporou tkinter.")
-    input("Stiskněte Enter pro zavření...")
     sys.exit(1)
+
+# --- Bezpečný import tkinterdnd2 (drag & drop) ---
+try:
+    from tkinterdnd2 import TkinterDnD, DND_FILES
+    TKDND_AVAILABLE = True
+except ImportError:
+    TKDND_AVAILABLE = False
 
 # --- Bezpečný import dotenv ---
 try:
@@ -35,6 +41,22 @@ except ImportError:
 
     def set_key(*args, **kwargs):
         pass  # No-op fallback
+
+# --------------------------------------------------------------------------- #
+# Detekce frozen (PyInstaller .exe) vs. běžný Python režim               #
+# --------------------------------------------------------------------------- #
+IS_FROZEN = getattr(sys, "frozen", False)
+
+# Při frozen režimu importujeme logiku přímo (subprocess nefunguje v .exe)
+if IS_FROZEN:
+    try:
+        import convert as _convert_module
+    except ImportError:
+        _convert_module = None
+    try:
+        import main as _main_module
+    except ImportError:
+        _main_module = None
 
 # --------------------------------------------------------------------------- #
 # Barevné téma (Premium Dark Mode)                                            #
@@ -261,7 +283,8 @@ class MigrationGUI:
         lbl_offline.grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 15))
 
         # Vstupní soubor
-        ttk.Label(form_frame, text="Zephyr export (.xlsx):").grid(
+        dnd_hint = " (nebo sem přetáhněte soubor)" if TKDND_AVAILABLE else ""
+        ttk.Label(form_frame, text=f"Zephyr export (.xlsx){dnd_hint}:").grid(
             row=1, column=0, sticky=tk.W, pady=5)
         self.entry_input_file = tk.Entry(
             form_frame, bg=BG_INPUT, fg=FG_TEXT,
@@ -273,6 +296,13 @@ class MigrationGUI:
         btn_browse_in = ttk.Button(form_frame, text="Procházet...",
                                    command=self.browse_input_file)
         btn_browse_in.grid(row=1, column=2, pady=5)
+
+        # Registrace drag & drop na vstupní pole
+        if TKDND_AVAILABLE:
+            self.entry_input_file.drop_target_register(DND_FILES)
+            self.entry_input_file.dnd_bind("<<Drop>>", self._on_drop_input_file)
+            self.entry_input_file.dnd_bind("<<DragEnter>>", self._on_drag_enter)
+            self.entry_input_file.dnd_bind("<<DragLeave>>", self._on_drag_leave)
 
         # Výstupní soubor
         ttk.Label(form_frame, text="Squash import (.xlsx):").grid(
@@ -346,6 +376,30 @@ class MigrationGUI:
             self.entry_input_file.delete(0, tk.END)
             self.entry_input_file.insert(0, path)
 
+    def _on_drop_input_file(self, event):
+        """Handler pro drag & drop souboru na vstupní pole."""
+        path = event.data.strip()
+        # tkinterdnd2 zabaluje cesty s mezerami do složených závorek
+        if path.startswith("{") and path.endswith("}"):
+            path = path[1:-1]
+        # Odebereme případné uvozovky
+        path = path.strip('"')
+        self.entry_input_file.configure(highlightbackground=COLOR_BORDER)
+        self.entry_input_file.delete(0, tk.END)
+        self.entry_input_file.insert(0, path)
+        return event.action
+
+    def _on_drag_enter(self, event):
+        """Vizuální feedback při najetí souboru nad pole."""
+        self.entry_input_file.configure(highlightbackground=COLOR_ACCENT,
+                                        highlightthickness=2)
+        return event.action
+
+    def _on_drag_leave(self, event):
+        """Reset vizuálního feedbacku po opuštění pole."""
+        self.entry_input_file.configure(highlightbackground=COLOR_BORDER,
+                                        highlightthickness=1)
+
     def browse_output_file(self):
         path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
@@ -385,17 +439,23 @@ class MigrationGUI:
             )
             return
 
-        # Uložíme si hodnoty do .env
         self.save_env_values()
-
         self.clear_logs()
-        self.log_to_console(">>> Startuji online API migraci (main.py)...\n")
+        self.log_to_console(">>> Startuji online API migraci...\n")
         self.btn_stop.configure(state=tk.NORMAL)
 
-        # Spuštění main.py jako subprocesu
-        cmd = [sys.executable, os.path.join(self.project_dir, "main.py")]
-        threading.Thread(target=self.execute_subprocess, args=(cmd,),
-                         daemon=True).start()
+        if IS_FROZEN and _main_module:
+            # .exe režim: voláme main() přímo s přesměrováním stdout
+            threading.Thread(
+                target=self._run_frozen_module,
+                args=(_main_module, "main", []),
+                daemon=True
+            ).start()
+        else:
+            # Python režim: spustíme jako subprocess
+            cmd = [sys.executable, os.path.join(self.project_dir, "main.py")]
+            threading.Thread(target=self.execute_subprocess, args=(cmd,),
+                             daemon=True).start()
 
     def run_offline_conversion(self):
         if self.running_process:
@@ -409,19 +469,96 @@ class MigrationGUI:
         if not in_file:
             messagebox.showerror("Chyba", "Vyberte vstupní soubor ze Zephyru.")
             return
+        if not out_file:
+            out_file = "squash_import.xlsx"
 
         self.clear_logs()
-        self.log_to_console(">>> Startuji offline konverzi Excel souboru (convert.py)...\n")
+        self.log_to_console(">>> Startuji offline konverzi Excel souboru...\n")
         self.btn_stop.configure(state=tk.NORMAL)
 
-        cmd = [
-            sys.executable, os.path.join(self.project_dir, "convert.py"),
-            "-i", in_file,
-            "-o", out_file,
-            "-p", proj_name
-        ]
-        threading.Thread(target=self.execute_subprocess, args=(cmd,),
-                         daemon=True).start()
+        if IS_FROZEN and _convert_module:
+            # .exe režim: voláme parse + write přímo v threadu
+            threading.Thread(
+                target=self._run_frozen_conversion,
+                args=(in_file, out_file, proj_name),
+                daemon=True
+            ).start()
+        else:
+            # Python režim: subprocess
+            cmd = [
+                sys.executable, os.path.join(self.project_dir, "convert.py"),
+                "-i", in_file, "-o", out_file, "-p", proj_name
+            ]
+            threading.Thread(target=self.execute_subprocess, args=(cmd,),
+                             daemon=True).start()
+
+    def _run_frozen_conversion(self, in_file, out_file, proj_name):
+        """Spustí konverzi přímo (frozen .exe režim) s přesměrováním výpisů."""
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.TextIOWrapper(
+            io.BytesIO(), encoding="utf-8", errors="replace", line_buffering=True
+        )
+        # Nahradíme stdout vlastním write, který posílá řádky do fronty
+        class QueueWriter:
+            def __init__(self, q):
+                self.q = q
+                self.buf = ""
+            def write(self, text):
+                self.buf += text
+                while "\n" in self.buf:
+                    line, self.buf = self.buf.split("\n", 1)
+                    self.q.put(line + "\n")
+            def flush(self):
+                if self.buf:
+                    self.q.put(self.buf)
+                    self.buf = ""
+        sys.stdout = QueueWriter(self.log_queue)
+        try:
+            test_cases = _convert_module.parse_zephyr_excel(in_file)
+            if not test_cases:
+                self.log_queue.put("Chyba: V souboru nebyly nalezeny žádné testovací případy.\n")
+            else:
+                _convert_module.write_squash_excel(test_cases, out_file, proj_name)
+                self.log_queue.put("\n>>> HOTOVO: Soubor uspěšně uložen.\n")
+                self.log_queue.put(f">>> Soubor: {os.path.abspath(out_file)}\n")
+        except Exception as e:
+            import traceback
+            self.log_queue.put(f"\n>>> CHYBA: {e}\n")
+            self.log_queue.put(traceback.format_exc())
+        finally:
+            sys.stdout = old_stdout
+            self.log_queue.put("__PROCESS_FINISHED__")
+
+    def _run_frozen_module(self, module, func_name, args):
+        """Spustí libovolnou funkci modulu s přesměrováním stdout."""
+        import io
+        old_stdout = sys.stdout
+        class QueueWriter:
+            def __init__(self, q):
+                self.q = q
+                self.buf = ""
+            def write(self, text):
+                self.buf += text
+                while "\n" in self.buf:
+                    line, self.buf = self.buf.split("\n", 1)
+                    self.q.put(line + "\n")
+            def flush(self):
+                if self.buf:
+                    self.q.put(self.buf)
+                    self.buf = ""
+        sys.stdout = QueueWriter(self.log_queue)
+        try:
+            fn = getattr(module, func_name)
+            fn(*args)
+            self.log_queue.put("\n>>> HOTOVO (Exit code 0).\n")
+        except Exception as e:
+            import traceback
+            self.log_queue.put(f"\n>>> CHYBA: {e}\n")
+            self.log_queue.put(traceback.format_exc())
+        finally:
+            sys.stdout = old_stdout
+            self.log_queue.put("__PROCESS_FINISHED__")
 
     def execute_subprocess(self, cmd):
         try:
@@ -430,9 +567,8 @@ class MigrationGUI:
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUNBUFFERED"] = "1"
 
-            # Spustíme proces se sloučeným stdout/stderr a zakázaným bufferováním
-            self.running_process = subprocess.Popen(
-                cmd,
+            # Na Windows skryjeme konzolové okno subprocesu
+            popen_kwargs = dict(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -440,8 +576,12 @@ class MigrationGUI:
                 errors="replace",
                 bufsize=1,
                 cwd=self.project_dir,
-                env=env
+                env=env,
             )
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+            self.running_process = subprocess.Popen(cmd, **popen_kwargs)
 
             # Čteme výstup řádek po řádku
             for line in iter(self.running_process.stdout.readline, ""):
@@ -503,7 +643,11 @@ class MigrationGUI:
 
 def main():
     try:
-        root = tk.Tk()
+        # Použijeme TkinterDnD.Tk() pokud je dostupné (podporuje drag & drop)
+        if TKDND_AVAILABLE:
+            root = TkinterDnD.Tk()
+        else:
+            root = tk.Tk()
         app = MigrationGUI(root)
         root.mainloop()
     except Exception as e:
