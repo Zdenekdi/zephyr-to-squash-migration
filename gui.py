@@ -350,8 +350,8 @@ class MigrationGUI:
             highlightbackground=COLOR_BORDER
         )
         self.entry_folder_name.grid(row=6, column=1, sticky=tk.EW, padx=10, pady=5)
-        self.entry_folder_name.insert(0, "Importovane_testy")
-        ttk.Label(form_frame, text="(podsložka kam půjdou testy)",
+        # Prázdné = testy jdou přímo do kořene projektu (TC_PATH = /NazevProjektu)
+        ttk.Label(form_frame, text="(nechat prázdné = přímo do projektu, bez podsložky)",
                   foreground=FG_MUTED).grid(row=6, column=2, sticky=tk.W)
 
         # Tlačítko start
@@ -493,7 +493,7 @@ class MigrationGUI:
         in_file = self.entry_input_file.get().strip()
         out_file = self.entry_output_file.get().strip()
         proj_name = self.entry_proj_name.get().strip()
-        folder_name = self.entry_folder_name.get().strip() or "Importovane_testy"
+        folder_name = self.entry_folder_name.get().strip()  # prázdné = bez podsložky
 
         if not in_file:
             messagebox.showerror("Chyba", "Vyberte vstupní soubor ze Zephyru.")
@@ -506,14 +506,12 @@ class MigrationGUI:
         self.btn_stop.configure(state=tk.NORMAL)
 
         if IS_FROZEN and _convert_module:
-            # .exe režim: voláme parse + write přímo v threadu
             threading.Thread(
                 target=self._run_frozen_conversion,
                 args=(in_file, out_file, proj_name, folder_name),
                 daemon=True
             ).start()
         else:
-            # Python režim: subprocess
             cmd = [
                 sys.executable, os.path.join(self.project_dir, "convert.py"),
                 "-i", in_file, "-o", out_file, "-p", proj_name, "-f", folder_name
@@ -521,7 +519,7 @@ class MigrationGUI:
             threading.Thread(target=self.execute_subprocess, args=(cmd,),
                              daemon=True).start()
 
-    def _run_frozen_conversion(self, in_file, out_file, proj_name, folder_name="Importovane_testy"):
+    def _run_frozen_conversion(self, in_file, out_file, proj_name, folder_name=""):
         """Spustí konverzi přímo (frozen .exe režim) s přesměrováním výpisů."""
         import io
         old_stdout = sys.stdout
