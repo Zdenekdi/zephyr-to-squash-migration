@@ -240,13 +240,14 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     
     # Map and write test cases
     for tc in test_cases:
-        # Build Squash Path: /NazevProjektu nebo /NazevProjektu/Slozka
-        # Formát ověřen na základě funkčního vzorového souboru
+        # Cesta: /NazevProjektu/Slozka
+        # Squash TM NEPŘIJÍMÁ cestu přímo do kořene projektu (napr. /EDAZ)
+        # – musí být vždy alespoň jedna podsložka (napr. /EDAZ/Importovane_testy)
         project_clean = project_name.strip("/").strip()
         if tc['folder']:
             squash_path = f"/{project_clean}/{tc['folder']}"
         else:
-            squash_path = f"/{project_clean}"
+            squash_path = f"/{project_clean}/Importovane_testy"
 
         # Status Mapping
         # Status mapping
