@@ -17,23 +17,29 @@ from openpyxl.utils import get_column_letter
 
 # Zephyr Scale Excel header search patterns (cleaned alphanumeric lowercase)
 # Zephyr Scale může exportovat sloupce různými názvy podle verze a nastavení
+# Ověřené názvy z uživatelova exportu: Summary, Description, Test Step, Test Result
 ZEPHYR_MAPPINGS = {
-    "key":          ["key", "id", "testcasekey", "issuekey", "tcjikey", "tckey", "jiratckey"],
-    "name":         ["name", "summary", "title", "subject", "tcname",
+    "key":          ["key", "id", "testcasekey", "issuekey", "tcjikey", "tckey", "jiratckey",
+                     "issuekey"],
+    "name":         ["summary",                                   # ← Zephyr Scale: "Summary"
+                     "name", "title", "subject", "tcname",
                      "testcasename", "testname", "casename", "issuename", "testcasetitle"],
     "folder":       ["folder", "folderpath", "path", "tcfolder", "component",
                      "testfolder", "suitepath", "module"],
     "status":       ["status", "state", "tcstatus", "teststatus"],
     "priority":     ["priority", "priorityname", "importance", "tcpriority", "severity"],
-    "objective":    ["objective", "description", "details", "tcobjective", "tcdescription",
+    "objective":    ["description",                               # ← Zephyr Scale: "Description"
+                     "objective", "details", "tcobjective", "tcdescription",
                      "testdescription", "goal"],
     "precondition": ["precondition", "preconditions", "prerequisites", "prerequisite",
                      "tcprecondition", "setup", "prereq"],
-    "step_action":  ["testscriptstepbystepstep", "step", "stepdescription", "action",
-                     "stepaction", "stepname", "teststep", "testaction", "steppbystepstep"],
+    "step_action":  ["teststep",                                  # ← Zephyr Scale: "Test Step"
+                     "testscriptstepbystepstep", "step", "stepdescription", "action",
+                     "stepaction", "stepname", "testaction", "steppbystepstep"],
     "step_data":    ["testscriptstepbysteptestdata", "testdata", "data", "stepdata",
                      "inputdata", "parameters"],
-    "step_expected":["testscriptstepbystepexpectedresult", "expectedresult", "expected",
+    "step_expected":["testresult",                                # ← Zephyr Scale: "Test Result"
+                     "testscriptstepbystepexpectedresult", "expectedresult", "expected",
                      "stepexpectedresult", "expectedresults", "result", "expectedoutput"]
 }
 
