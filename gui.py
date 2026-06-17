@@ -148,7 +148,8 @@ class MigrationGUI:
 
         # Záložky (Notebook)
         self.notebook = ttk.Notebook(main_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=False, height=330)
+        self.notebook.configure(height=330)  # height patří do configure(), ne pack()
+        self.notebook.pack(fill=tk.BOTH, expand=False)
 
         # Vytvoření jednotlivých záložek
         self.tab_online = tk.Frame(self.notebook, bg=BG_CARD,
@@ -512,10 +513,14 @@ def main():
         try:
             # Pokusíme se zobrazit chybové okno
             import tkinter.messagebox as mb
-            mb.showerror("Kritická chyba", f"Aplikaci se nepodařilo spustit:\n\n{e}\n\nViz konzoli pro detaily.")
+            mb.showerror("Kritická chyba", f"Aplikaci se nepodařilo spustit:\n\n{e}")
         except Exception:
             pass
-        input("\nStiskněte Enter pro zavření...")
+        try:
+            # input() nefunguje v .exe bez konzole (lost sys.stdin) – ignorujeme
+            input("\nStiskněte Enter pro zavření...")
+        except (EOFError, RuntimeError, OSError):
+            pass
         sys.exit(1)
 
 
