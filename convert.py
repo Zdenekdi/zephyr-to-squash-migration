@@ -377,14 +377,18 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         ])
 
         # STEPS řádky
+        # TC_OWNER_PATH musí být PLNÁ cesta testu = složka + název testu
+        # Squash TM matchuje kroky k testům přes tuto cestu
+        tc_full_path = f"{squash_path}/{tc['name']}"
         for step_num, step in enumerate(tc["steps"], start=1):
             ws_steps.append([
                 "C",                              # ACTION
-                squash_path,                      # TC_OWNER_PATH
+                tc_full_path,                     # TC_OWNER_PATH = /EDAZ/Složka/Název testu
                 step_num,                         # TC_STEP_NUM
                 clean_html(step["action"]),       # TC_STEP_ACTION
                 clean_html(step["expected"]),     # TC_STEP_EXPECTED_RESULT
             ])
+
 
     # Uložení
     wb.save(output_path)
