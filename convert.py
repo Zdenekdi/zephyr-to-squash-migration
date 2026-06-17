@@ -201,34 +201,42 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
     return test_cases
 
 def write_squash_excel(test_cases: list[dict], output_path: str, project_name: str) -> None:
-    """Generates Squash TM compatible Excel import file with 5 sheets."""
+    """Generates Squash TM compatible Excel import file.
+    Column names verified against official Squash TM import template.
+    """
     print(f"\nVytvářím Squash TM importní soubor: {output_path}")
     wb = openpyxl.Workbook()
-    
-    # 1. Sheet TEST_CASES
+
+    # 1. Sheet TEST_CASES – dle officiálního template
+    # TC_WEIGHT (ne TC_IMPORTANCE), TC_PRE_REQUISITE (ne TC_PREREQUISITES)
     ws_tc = wb.active
     ws_tc.title = "TEST_CASES"
-    # Formát ověřen na základě funkčního vzorového souboru ze Squash TM:
-    tc_headers = [
-        "ACTION", "TC_PATH", "TC_NAME", "TC_REFERENCE",
-        "TC_IMPORTANCE", "TC_STATUS", "TC_DESCRIPTION", "TC_PREREQUISITES"
-    ]
-    ws_tc.append(tc_headers)
-    
-    # 2. Sheet STEPS
+    ws_tc.append([
+        "ACTION", "TC_PATH", "TC_NUM", "TC_REFERENCE", "TC_NAME",
+        "TC_WEIGHT", "TC_STATUS", "TC_DESCRIPTION", "TC_PRE_REQUISITE"
+    ])
+
+    # 2. Sheet STEPS – TC_STEP_ACTION, TC_STEP_EXPECTED_RESULT, TC_STEP_NUM
     ws_steps = wb.create_sheet(title="STEPS")
-    step_headers = ["ACTION", "TC_OWNER_PATH", "TC_NAME", "STEP_ACTION", "STEP_EXPECTED_RESULT"]
-    ws_steps.append(step_headers)
+    ws_steps.append([
+        "ACTION", "TC_OWNER_PATH", "TC_STEP_NUM",
+        "TC_STEP_ACTION", "TC_STEP_EXPECTED_RESULT"
+    ])
 
-    # Create empty dummy sheets to prevent Squash import errors
+    # 3. Sheet PARAMETERS – TC_PARAM_DESCRIPTION přidán dle template
     ws_params = wb.create_sheet(title="PARAMETERS")
-    ws_params.append(["ACTION", "TC_OWNER_PATH", "TC_PARAM_NAME"])
+    ws_params.append(["ACTION", "TC_OWNER_PATH", "TC_PARAM_NAME", "TC_PARAM_DESCRIPTION"])
 
+    # 4. Sheet DATASETS – TC_PARAM_OWNER_PATH přidán dle template
     ws_datasets = wb.create_sheet(title="DATASETS")
-    ws_datasets.append(["ACTION", "TC_OWNER_PATH", "TC_DATASET_NAME", "TC_DATASET_PARAM_NAME", "TC_DATASET_PARAM_VALUE"])
+    ws_datasets.append([
+        "ACTION", "TC_OWNER_PATH", "TC_DATASET_NAME",
+        "TC_PARAM_OWNER_PATH", "TC_DATASET_PARAM_NAME", "TC_DATASET_PARAM_VALUE"
+    ])
 
+    # 5. Sheet LINK_REQ_TC – bez ACTION a TC_NAME dle template
     ws_links = wb.create_sheet(title="LINK_REQ_TC")
-    ws_links.append(["ACTION", "REQ_PATH", "REQ_VERSION_NUM", "TC_PATH", "TC_NAME"])
+    ws_links.append(["REQ_PATH", "REQ_VERSION_NUM", "TC_PATH"])
     
     # Map and write test cases
     for tc in test_cases:
@@ -241,40 +249,42 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
             squash_path = f"/{project_clean}"
 
         # Status Mapping
+        # Status mapping
         cleaned_status = clean_header(tc["status"])
         squash_status = STATUS_MAP.get(cleaned_status, "UNDER_REVISION")
 
-        # Importance Mapping
+        # Weight (importance) mapping – TC_WEIGHT dle template
         cleaned_priority = clean_header(tc["priority"])
-        squash_importance = IMPORTANCE_MAP.get(cleaned_priority, "MEDIUM")
+        squash_weight = IMPORTANCE_MAP.get(cleaned_priority, "MEDIUM")
 
-        # HTML formatting for rich text fields
+        # HTML formátování
         description_html = clean_html(tc["objective"])
         precondition_html = clean_html(tc["precondition"])
 
-        # Append to TEST_CASES sheet
+        # TEST_CASES řádek
         ws_tc.append([
-            "C",                         # ACTION
-            squash_path,                 # TC_PATH
-            tc["name"],                  # TC_NAME
-            tc["key"],                   # TC_REFERENCE
-            squash_importance,           # TC_IMPORTANCE
-            squash_status,               # TC_STATUS
-            description_html,            # TC_DESCRIPTION
-            precondition_html            # TC_PREREQUISITES
+            "C",                  # ACTION
+            squash_path,          # TC_PATH
+            "",                   # TC_NUM (auto)
+            tc["key"],            # TC_REFERENCE (klíč ze Zephyru, např. EDAZ-123)
+            tc["name"],           # TC_NAME
+            squash_weight,        # TC_WEIGHT
+            squash_status,        # TC_STATUS
+            description_html,     # TC_DESCRIPTION
+            precondition_html,    # TC_PRE_REQUISITE
         ])
-        
-        # Append steps to STEPS sheet
-        for step in tc["steps"]:
+
+        # STEPS řádky
+        for step_num, step in enumerate(tc["steps"], start=1):
             ws_steps.append([
-                "C",                     # ACTION
-                squash_path,             # TC_OWNER_PATH
-                tc["name"],              # TC_NAME
-                clean_html(step["action"]),   # STEP_ACTION
-                clean_html(step["expected"])  # STEP_EXPECTED_RESULT
+                "C",                              # ACTION
+                squash_path,                      # TC_OWNER_PATH
+                step_num,                         # TC_STEP_NUM
+                clean_html(step["action"]),       # TC_STEP_ACTION
+                clean_html(step["expected"]),     # TC_STEP_EXPECTED_RESULT
             ])
-            
-    # Save file
+
+    # Uložení
     wb.save(output_path)
     wb.close()
     print(f"Soubor úspěšně uložen. Obsahuje:")
