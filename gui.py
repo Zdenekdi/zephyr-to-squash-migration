@@ -342,8 +342,8 @@ class MigrationGUI:
             highlightbackground=COLOR_BORDER
         )
         self.entry_folder_name.grid(row=4, column=1, sticky=tk.EW, padx=10, pady=5)
-        self.entry_folder_name.insert(0, "Importovane_testy")
-        ttk.Label(form_frame, text="(složka kam půjdou testy)",
+        self.entry_folder_name.insert(0, "")
+        ttk.Label(form_frame, text="(prázdné = přímo do kořene projektu)",
                   foreground=FG_MUTED).grid(row=4, column=2, sticky=tk.W)
 
         # Tlačítko start

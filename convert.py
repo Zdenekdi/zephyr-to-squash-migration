@@ -350,9 +350,12 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         if tc['folder']:
             # Explicitní složka ze Zephyr exportu
             squash_path = f"/{project_clean}/{tc['folder']}"
-        else:
-            # Použij nakonfigurovanou cílovou složku
+        elif folder_name:
+            # Uživatelsky definovaná cílová složka
             squash_path = f"/{project_clean}/{folder_name}"
+        else:
+            # Prázdná složka – testy jdou přímo do kořene projektu
+            squash_path = f"/{project_clean}"
 
         # Status mapping – použij jen bezpečné hodnoty
         cleaned_status = clean_header(tc["status"])
