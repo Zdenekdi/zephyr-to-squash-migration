@@ -1,0 +1,88 @@
+name: Build Windows EXE & Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'        # spustí se při push tagu jako v1.0.0
+  workflow_dispatch:    # nebo ručně přes GitHub UI
+    inputs:
+      tag_name:
+        description: 'Verze releasu (např. v1.0.0)'
+        required: false
+        default: 'v0.0.0-dev'
+
+permissions:
+  contents: write       # potřebné pro vytvoření GitHub Release
+
+jobs:
+  build-windows-exe:
+    name: Build .exe on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.11.1
+
+      - name: Build standalone EXE
+        run: |
+          pyinstaller ZephyrToSquash.spec --clean --noconfirm
+
+      - name: Verify EXE was created
+        run: |
+          if (Test-Path "dist\ZephyrToSquash.exe") {
+            $size = (Get-Item "dist\ZephyrToSquash.exe").Length / 1MB
+            Write-Host "OK: ZephyrToSquash.exe vytvoren ($([math]::Round($size,1)) MB)"
+          } else {
+            Write-Error "CHYBA: ZephyrToSquash.exe nebyl vytvoret!"
+            exit 1
+          }
+
+      - name: Determine release tag
+        id: get_tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release and upload EXE
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: "Zephyr → Squash TM Tool ${{ steps.get_tag.outputs.tag }}"
+          body: |
+            ## 🚀 Zephyr to Squash TM Migration Tool
+
+            ### Stažení pro Windows
+            Stáhněte soubor **`ZephyrToSquash.exe`** níže a spusťte ho dvojklikem.
+            **Python není potřeba instalovat** – vše je součástí souboru.
+
+            ### Co nástroj umí
+            - **Online API migrace**: přímý přenos testů ze Zephyr Scale do Squash TM přes REST API
+            - **Offline Excel konverze**: převod exportovaného Excel souboru ze Zephyru na importní soubor pro Squash TM
+
+            ### První spuštění
+            Windows Defender může zobrazit varování „Neznámý vydavatel". Klikněte na **Další informace → Přesto spustit**.
+            Toto je běžné chování pro unsigned aplikace.
+
+            ### Konfigurace
+            Při prvním spuštění vyplňte přihlašovací údaje přímo v GUI.
+            Volitelně můžete vedle `.exe` umístit soubor `.env` s předvyplněnými hodnotami (viz `.env.example`).
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          files: |
+            dist/ZephyrToSquash.exe

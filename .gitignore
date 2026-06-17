@@ -40,3 +40,8 @@ env/
 migration.log
 *.xlsx
 *.log
+
+# PyInstaller build artifacts
+*.spec.bak
+__pycache__/
+gui_error.log
