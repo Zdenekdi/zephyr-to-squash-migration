@@ -24,9 +24,10 @@ ZEPHYR_MAPPINGS = {
     "name":         ["summary",                                   # ← Zephyr Scale: "Summary"
                      "name", "title", "subject", "tcname",
                      "testcasename", "testname", "casename", "issuename", "testcasetitle"],
-    "folder":       ["folder", "folderpath", "path", "tcfolder", "component",
+    "folder":       ["folder", "folderpath", "path", "tcfolder", "component", "components",
                      "testfolder", "suitepath", "module"],
-    "status":       ["status", "state", "tcstatus", "teststatus"],
+    "status":       ["status", "state", "tcstatus", "teststatus",
+                     "statuscategory", "statusname", "statuslabel"],  # ← Zephyr: "Status Category"
     "priority":     ["priority", "priorityname", "importance", "tcpriority", "severity"],
     "objective":    ["description",                               # ← Zephyr Scale: "Description"
                      "objective", "details", "tcobjective", "tcdescription",
@@ -273,15 +274,25 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
         step_exp = str(row[mapping["step_expected"]]).strip() if "step_expected" in mapping and row[mapping["step_expected"]] is not None else ""
         step_dat = str(row[mapping["step_data"]]).strip() if "step_data" in mapping and row[mapping["step_data"]] is not None else ""
         
-        # If there's step data, append it to step action to preserve it
-        if step_dat and step_act:
-            step_act = f"{step_act}\n\n[TestData: {step_dat}]"
-            
-        if current_tc and (step_act or step_exp):
-            current_tc["steps"].append({
-                "action": step_act,
-                "expected": step_exp
-            })
+        # Zpracování kroků:
+        # - Pokud má TestStep (step_act) hodnotu → nový krok
+        # - Pokud je TestStep prázdný ale TestResult (step_exp) má hodnotu
+        #   → pokračování výsledku předcházejícího kroku (nevytváříme nový krok!)
+        if current_tc:
+            if step_act:
+                # Nový krok
+                current_tc["steps"].append({
+                    "action": step_act,
+                    "expected": step_exp
+                })
+            elif step_exp:
+                # Pokračování – připoj k pošledjímu kroku
+                if current_tc["steps"]:
+                    prev = current_tc["steps"][-1]
+                    prev["expected"] = (prev["expected"] + "\n" + step_exp).strip()
+                else:
+                    # Žádný předchozí krok – vytvoříme krok jen s výsledkem
+                    current_tc["steps"].append({"action": "", "expected": step_exp})
             
     # Add the last test case
     if current_tc:

@@ -342,9 +342,10 @@ class MigrationGUI:
             highlightbackground=COLOR_BORDER
         )
         self.entry_folder_name.grid(row=4, column=1, sticky=tk.EW, padx=10, pady=5)
-        self.entry_folder_name.insert(0, "")
-        ttk.Label(form_frame, text="(prázdné = přímo do kořene projektu)",
+        self.entry_folder_name.insert(0, "Importovane_testy")
+        ttk.Label(form_frame, text="(podsložka kam půjdou testy, musí existovat nebo bude vytvořena)",
                   foreground=FG_MUTED).grid(row=4, column=2, sticky=tk.W)
+
 
         # Tlačítko start
         btn_start_offline = ttk.Button(
