@@ -208,13 +208,10 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     # 1. Sheet TEST_CASES
     ws_tc = wb.active
     ws_tc.title = "TEST_CASES"
-    # Poznámka ke sloupcům:
-    # - TC_PREREQUISITE (bez S) – správný název v Squash TM
-    # - TC_IMPORTANCE není ve všech verzích Squash TM – vynecháváme
-    # - TC_REFERENCE – referencní kód testcase (klíč ze Zephyru)
+    # Formát ověřen na základě funkčního vzorového souboru ze Squash TM:
     tc_headers = [
         "ACTION", "TC_PATH", "TC_NAME", "TC_REFERENCE",
-        "TC_STATUS", "TC_DESCRIPTION", "TC_PREREQUISITE"
+        "TC_IMPORTANCE", "TC_STATUS", "TC_DESCRIPTION", "TC_PREREQUISITES"
     ]
     ws_tc.append(tc_headers)
     
@@ -235,18 +232,21 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     
     # Map and write test cases
     for tc in test_cases:
-        # Build Squash Path (bez úvodního lomítka, vždy s alespoň jednou podsložkou)
-        # Squash TM vyžaduje formát: NazevProjektu/Slozka
-        # Příklad: MujProjekt/Testy nebo MujProjekt/Zephyr/Import
+        # Build Squash Path: /NazevProjektu nebo /NazevProjektu/Slozka
+        # Formát ověřen na základě funkčního vzorového souboru
         project_clean = project_name.strip("/").strip()
         if tc['folder']:
-            squash_path = f"{project_clean}/{tc['folder']}"
+            squash_path = f"/{project_clean}/{tc['folder']}"
         else:
-            squash_path = f"{project_clean}/Importovane_testy"
+            squash_path = f"/{project_clean}"
 
         # Status Mapping
         cleaned_status = clean_header(tc["status"])
-        squash_status = STATUS_MAP.get(cleaned_status, "WORK_IN_PROGRESS")
+        squash_status = STATUS_MAP.get(cleaned_status, "UNDER_REVISION")
+
+        # Importance Mapping
+        cleaned_priority = clean_header(tc["priority"])
+        squash_importance = IMPORTANCE_MAP.get(cleaned_priority, "MEDIUM")
 
         # HTML formatting for rich text fields
         description_html = clean_html(tc["objective"])
@@ -258,9 +258,10 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
             squash_path,                 # TC_PATH
             tc["name"],                  # TC_NAME
             tc["key"],                   # TC_REFERENCE
+            squash_importance,           # TC_IMPORTANCE
             squash_status,               # TC_STATUS
             description_html,            # TC_DESCRIPTION
-            precondition_html            # TC_PREREQUISITE
+            precondition_html            # TC_PREREQUISITES
         ])
         
         # Append steps to STEPS sheet
