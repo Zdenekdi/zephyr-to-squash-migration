@@ -3,8 +3,8 @@ name: Build Windows EXE & Release
 on:
   push:
     tags:
-      - 'v*.*.*'        # spustí se při push tagu jako v1.0.0
-  workflow_dispatch:    # nebo ručně přes GitHub UI
+      - 'v*.*.*'
+  workflow_dispatch:
     inputs:
       tag_name:
         description: 'Verze releasu (např. v1.0.0)'
@@ -12,7 +12,8 @@ on:
         default: 'v0.0.0-dev'
 
 permissions:
-  contents: write       # potřebné pro vytvoření GitHub Release
+  contents: write
+  id-token: write    # potřebné pro Azure Trusted Signing (OIDC)
 
 jobs:
   build-windows-exe:
@@ -42,23 +43,99 @@ jobs:
         run: |
           if (Test-Path "dist\ZephyrToSquash.exe") {
             $size = (Get-Item "dist\ZephyrToSquash.exe").Length / 1MB
-            Write-Host "OK: ZephyrToSquash.exe vytvoren ($([math]::Round($size,1)) MB)"
+            Write-Host "OK: ZephyrToSquash.exe ($([math]::Round($size,1)) MB)"
           } else {
-            Write-Error "CHYBA: ZephyrToSquash.exe nebyl vytvoret!"
+            Write-Error "CHYBA: ZephyrToSquash.exe nebyl vytvořen!"
             exit 1
           }
+
+      # ------------------------------------------------------------------ #
+      # Podepisování – Azure Trusted Signing (volitelné)                    #
+      # Pokud jsou nastaveny secrets AZURE_*, EXE bude podepsáno.          #
+      # Bez secrets se přeskočí a EXE zůstane nepodepsáno.                 #
+      # ------------------------------------------------------------------ #
+      - name: Sign EXE with Azure Trusted Signing
+        if: |
+          env.AZURE_TENANT_ID != '' &&
+          env.AZURE_CLIENT_ID != '' &&
+          env.AZURE_CLIENT_SECRET != '' &&
+          env.AZURE_SIGNING_ACCOUNT != '' &&
+          env.AZURE_CERT_PROFILE != ''
+        env:
+          AZURE_TENANT_ID:      ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID:      ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET:  ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE:   ${{ secrets.AZURE_CERT_PROFILE }}
+          AZURE_ENDPOINT:       ${{ secrets.AZURE_ENDPOINT }}
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id:            ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id:            ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret:        ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint:                   ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name:   ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder:               dist
+          files-folder-filter:        exe
+          file-digest:                SHA256
+          timestamp-rfc3161:          http://timestamp.acs.microsoft.com
+          timestamp-digest:           SHA256
+
+      # ------------------------------------------------------------------ #
+      # Alternativa: Self-signed certifikát (záloha pokud není Azure)       #
+      # Odstraní "Unknown Publisher", ale SmartScreen varování zůstane.    #
+      # Nastavte secret SIGNING_CERT_PFX (base64) a SIGNING_CERT_PASSWORD  #
+      # ------------------------------------------------------------------ #
+      - name: Sign EXE with self-signed certificate (fallback)
+        if: |
+          env.SIGNING_CERT_PFX != '' &&
+          env.AZURE_TENANT_ID == ''
+        env:
+          SIGNING_CERT_PFX:      ${{ secrets.SIGNING_CERT_PFX }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          # Dekódujeme PFX ze secret
+          $pfxBytes = [Convert]::FromBase64String($env:SIGNING_CERT_PFX)
+          $pfxPath  = Join-Path $env:TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+          # Najdeme signtool (součást Windows SDK)
+          $signtool = Get-ChildItem -Recurse `
+            "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Filter "signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+
+          if (-not $signtool) {
+            Write-Warning "signtool.exe nenalezen – přeskakuji podepisování"
+            exit 0
+          }
+
+          & $signtool.FullName sign `
+            /f  $pfxPath `
+            /p  $env:SIGNING_CERT_PASSWORD `
+            /fd SHA256 `
+            /tr http://timestamp.digicert.com `
+            /td SHA256 `
+            /d  "Zephyr to Squash TM Migration Tool" `
+            "dist\ZephyrToSquash.exe"
+
+          Remove-Item $pfxPath -Force
+          Write-Host "EXE podepsáno self-signed certifikátem."
 
       - name: Copy README and env example next to EXE
         run: |
           Copy-Item ".env.example" "dist\.env.example"
-          Copy-Item "README.md" "dist\README.md"
+          Copy-Item "README.md"    "dist\README.md"
 
-      - name: Package EXE into ZIP (browsers block .exe less aggressively)
+      - name: Package EXE into ZIP
         run: |
-          Compress-Archive -Path "dist\ZephyrToSquash.exe", "dist\.env.example", "dist\README.md" `
+          Compress-Archive `
+            -Path "dist\ZephyrToSquash.exe","dist\.env.example","dist\README.md" `
             -DestinationPath "dist\ZephyrToSquash-windows.zip"
           $size = (Get-Item "dist\ZephyrToSquash-windows.zip").Length / 1MB
-          Write-Host "OK: ZephyrToSquash-windows.zip ($([math]::Round($size,1)) MB)"
+          Write-Host "ZIP: $([math]::Round($size,1)) MB"
 
       - name: Determine release tag
         id: get_tag
@@ -70,7 +147,7 @@ jobs:
             echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Release and upload artifacts
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
@@ -82,42 +159,28 @@ jobs:
 
             | Soubor | Popis |
             |---|---|
-            | **`ZephyrToSquash-windows.zip`** | ✅ Doporučeno – ZIP archiv, prohlížeče ho blokují méně |
+            | **`ZephyrToSquash-windows.zip`** | ✅ Doporučeno – ZIP archiv |
             | `ZephyrToSquash.exe` | Přímý spustitelný soubor |
 
-            **Python není potřeba instalovat** – vše je součástí souboru.
+            **Python není potřeba instalovat.**
 
             ---
 
-            ### ⚠️ Jak obejít varování prohlížeče (Edge / Chrome)
+            ### ⚠️ Varování prohlížeče / SmartScreen
 
-            Prohlížeče mohou zobrazit varování při stahování `.exe`. Aplikace je bezpečná – varování se zobrazuje proto, že soubor není komerčně podepsán.
+            **Edge:** `...` → Ponechat → Zobrazit více → Přesto ponechat  
+            **Chrome:** šipka `▾` → Ponechat  
+            **SmartScreen při spuštění:** Další informace → Přesto spustit
 
-            **Edge:**
-            1. Klikněte na `...` vedle staženého souboru → **Ponechat**
-            2. Klikněte na **Zobrazit více** → **Přesto ponechat**
-
-            **Chrome:**
-            1. Klikněte na šipku ▾ vedle staženého souboru → **Ponechat**
-
-            **Windows SmartScreen** (při spuštění):
-            1. Klikněte na **Další informace**
-            2. Klikněte na **Přesto spustit**
-
-            > Soubor je generován automaticky z [open-source kódu](https://github.com/Zdenekdi/zephyr-to-squash-migration) přes GitHub Actions – každý si může ověřit, co obsahuje.
+            > Zdrojový kód je veřejný: [github.com/Zdenekdi/zephyr-to-squash-migration](https://github.com/Zdenekdi/zephyr-to-squash-migration)
 
             ---
 
             ### Co nástroj umí
-            - **Online API migrace** – přímý přenos testů ze Zephyr Scale do Squash TM přes REST API
-            - **Offline Excel konverze** – převod exportovaného Excel souboru ze Zephyru na importní soubor pro Squash TM
-
-            ### Konfigurace
-            Při prvním spuštění vyplňte přihlašovací údaje přímo v GUI.
-            Volitelně umístěte vedle `.exe` soubor `.env` (šablona je přibalena v ZIP).
+            - **Online API migrace** – přenos testů ze Zephyr Scale do Squash TM přes REST API
+            - **Offline Excel konverze** – převod Zephyr exportu na Squash TM importní soubor
           draft: false
           prerelease: false
-          generate_release_notes: false
           files: |
             dist/ZephyrToSquash-windows.zip
             dist/ZephyrToSquash.exe
