@@ -179,18 +179,33 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
         
     print(f"Načítám soubor: {file_path}")
     wb = openpyxl.load_workbook(file_path, data_only=True)
+
+    # Zobraz všechny listy v souboru
+    print(f"\nListy v souboru: {wb.sheetnames}")
     sheet = wb.active
-    print(f"Aktivní list: {sheet.title} ({sheet.max_row} řádků)")
-    
-    # Extract headers from the first row
+    print(f"Aktivní list: '{sheet.title}' ({sheet.max_row} řádků, {sheet.max_column} sloupců)")
+
+    # Zobraz RAW záhlaví (přesně jak jsou v souboru)
     headers = [cell.value for cell in sheet[1]]
+    print("\nRaw záhlaví sloupců (řádek 1):")
+    for i, h in enumerate(headers):
+        print(f"  Sloupec {i+1}: {repr(h)}")
+
     mapping = map_headers(headers)
-    
+
     print("\nDetekované mapování sloupců:")
     for target, idx in mapping.items():
         col_letter = get_column_letter(idx + 1)
-        print(f"  - {target:15} -> Sloupec {col_letter} ({headers[idx]})")
-        
+        print(f"  - {target:15} -> Sloupec {col_letter} ({repr(headers[idx])})")
+
+    # Zobraz nemapované sloupce
+    mapped_idxs = set(mapping.values())
+    unmapped = [(i, h) for i, h in enumerate(headers) if i not in mapped_idxs and h is not None]
+    if unmapped:
+        print("\nNemapované sloupce (ignorovány):")
+        for i, h in unmapped:
+            print(f"  Sloupec {i+1}: {repr(h)}")
+
     # Check for mandatory columns
     mandatory = ["name"]
     missing = [m for m in mandatory if m not in mapping]
@@ -256,9 +271,20 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
     # Add the last test case
     if current_tc:
         test_cases.append(current_tc)
-        
+
     wb.close()
     print(f"\nÚspěšně načteno {len(test_cases)} testovacích případů ze Zephyr exportu.")
+
+    # Diagnostika – ukáže prvních 5 TC aby bylo vidět co se parsuje
+    print("\n--- DIAGNOSTIKA: prvních 5 testovacích případů ---")
+    for tc in test_cases[:5]:
+        steps_ok = len(tc['steps'])
+        first_step = tc['steps'][0]['action'][:60] if tc['steps'] else '(žádné stepy)'
+        print(f"  KEY:    {repr(tc['key'])}")
+        print(f"  NAME:   {repr(tc['name'])}")
+        print(f"  FOLDER: {repr(tc['folder'])}")
+        print(f"  STEPS:  {steps_ok} kroků | 1. krok: {repr(first_step)}")
+        print()
     return test_cases
 
 def write_squash_excel(test_cases: list[dict], output_path: str, project_name: str) -> None:
@@ -310,10 +336,9 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         else:
             squash_path = f"/{project_clean}/Importovane_testy"
 
-        # Status Mapping
-        # Status mapping
+        # Status mapping – default WORK_IN_PROGRESS (bezpečnější než UNDER_REVISION)
         cleaned_status = clean_header(tc["status"])
-        squash_status = STATUS_MAP.get(cleaned_status, "UNDER_REVISION")
+        squash_status = STATUS_MAP.get(cleaned_status, "WORK_IN_PROGRESS")
 
         # Weight (importance) mapping – TC_WEIGHT dle template
         cleaned_priority = clean_header(tc["priority"])
@@ -327,8 +352,8 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         ws_tc.append([
             "C",                  # ACTION
             squash_path,          # TC_PATH
-            "",                   # TC_NUM (auto)
-            tc["key"],            # TC_REFERENCE (klíč ze Zephyru, např. EDAZ-123)
+            None,                 # TC_NUM (prázdná buňka, ne "", jinak Squash TM selže při parsování)
+            tc["key"],            # TC_REFERENCE
             tc["name"],           # TC_NAME
             squash_weight,        # TC_WEIGHT
             squash_status,        # TC_STATUS
