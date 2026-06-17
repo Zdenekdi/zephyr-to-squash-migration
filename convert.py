@@ -381,15 +381,19 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         precondition_html = clean_html(tc["precondition"])
 
         # TEST_CASES řádek
+        # TC_REFERENCE je záměrně prázdné (None) – pokud by Squash TM evidoval
+        # staré testy se stejným TC_REFERENCE pod jiným názvem, vzniká chyba
+        # "inconsistent". Klíč Zephyru ukládáme do popisu pro dohledatelnost.
+        key_note = f'<p><strong>Zephyr key: {tc["key"]}</strong></p>\n' if tc['key'] else ''
         ws_tc.append([
             "C",                  # ACTION
             squash_path,          # TC_PATH
-            None,                 # TC_NUM (prázdná buňka, ne "", jinak Squash TM selže při parsování)
-            tc["key"],            # TC_REFERENCE
+            None,                 # TC_NUM
+            None,                 # TC_REFERENCE – prázdné záměrně (viz výše)
             tc["name"],           # TC_NAME
             squash_weight,        # TC_WEIGHT
             squash_status,        # TC_STATUS
-            description_html,     # TC_DESCRIPTION
+            key_note + description_html,  # TC_DESCRIPTION (klíč + popis)
             precondition_html,    # TC_PRE_REQUISITE
         ])
 
