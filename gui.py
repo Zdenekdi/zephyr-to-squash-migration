@@ -47,16 +47,16 @@ except ImportError:
 # --------------------------------------------------------------------------- #
 IS_FROZEN = getattr(sys, "frozen", False)
 
-# Při frozen režimu importujeme logiku přímo (subprocess nefunguje v .exe)
+# Při frozen režimu importujeme convert přímo (subprocess nefunguje v .exe)
+# POZOR: 'main' se nesmí importovat při startu – config.py by ověřil .env
+#        a spadl by, pokud není nakonfigurováno. Import main probíhá lazy.
 if IS_FROZEN:
     try:
         import convert as _convert_module
     except ImportError:
         _convert_module = None
-    try:
-        import main as _main_module
-    except ImportError:
-        _main_module = None
+else:
+    _convert_module = None
 
 # --------------------------------------------------------------------------- #
 # Barevné téma (Premium Dark Mode)                                            #
@@ -444,11 +444,11 @@ class MigrationGUI:
         self.log_to_console(">>> Startuji online API migraci...\n")
         self.btn_stop.configure(state=tk.NORMAL)
 
-        if IS_FROZEN and _main_module:
-            # .exe režim: voláme main() přímo s přesměrováním stdout
+        if IS_FROZEN:
+            # .exe režim: lazy import main + přesměrování stdout
             threading.Thread(
                 target=self._run_frozen_module,
-                args=(_main_module, "main", []),
+                args=("main",),
                 daemon=True
             ).start()
         else:
@@ -530,10 +530,13 @@ class MigrationGUI:
             sys.stdout = old_stdout
             self.log_queue.put("__PROCESS_FINISHED__")
 
-    def _run_frozen_module(self, module, func_name, args):
-        """Spustí libovolnou funkci modulu s přesměrováním stdout."""
-        import io
+    def _run_frozen_module(self, func_name):
+        """Lazy import main + spuštění funkce s přesměrováním stdout.
+        main.py se importuje až zde, ne při startu, aby config.py
+        nespouštěl validaci .env dříve, než uživatel vyplní přihlašovací údaje.
+        """
         old_stdout = sys.stdout
+
         class QueueWriter:
             def __init__(self, q):
                 self.q = q
@@ -547,15 +550,26 @@ class MigrationGUI:
                 if self.buf:
                     self.q.put(self.buf)
                     self.buf = ""
+
         sys.stdout = QueueWriter(self.log_queue)
         try:
-            fn = getattr(module, func_name)
-            fn(*args)
-            self.log_queue.put("\n>>> HOTOVO (Exit code 0).\n")
-        except Exception as e:
-            import traceback
-            self.log_queue.put(f"\n>>> CHYBA: {e}\n")
-            self.log_queue.put(traceback.format_exc())
+            # Lazy import – proběhne až teď, po uložení .env
+            import importlib
+            try:
+                # Pokud už byl importován, znovu načteme (aby config vzal nové .env)
+                if "config" in sys.modules:
+                    importlib.reload(sys.modules["config"])
+                if "main" in sys.modules:
+                    _m = importlib.reload(sys.modules["main"])
+                else:
+                    import main as _m
+                fn = getattr(_m, func_name)
+                fn()
+                self.log_queue.put("\n>>> HOTOVO (Exit code 0).\n")
+            except Exception as e:
+                import traceback
+                self.log_queue.put(f"\n>>> CHYBA: {e}\n")
+                self.log_queue.put(traceback.format_exc())
         finally:
             sys.stdout = old_stdout
             self.log_queue.put("__PROCESS_FINISHED__")
