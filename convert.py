@@ -216,18 +216,18 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     
     # 2. Sheet STEPS
     ws_steps = wb.create_sheet(title="STEPS")
-    step_headers = ["ACTION", "TC_PATH", "TC_NAME", "STEP_ACTION", "STEP_EXPECTED_RESULT"]
+    step_headers = ["ACTION", "TC_OWNER_PATH", "TC_NAME", "STEP_ACTION", "STEP_EXPECTED_RESULT"]
     ws_steps.append(step_headers)
-    
+
     # Create empty dummy sheets to prevent Squash import errors
     ws_params = wb.create_sheet(title="PARAMETERS")
-    ws_params.append(["ACTION", "TC_PATH", "TC_NAME", "PARAM_NAME", "PARAM_VALUE"])
-    
+    ws_params.append(["ACTION", "TC_OWNER_PATH", "TC_PARAM_NAME"])
+
     ws_datasets = wb.create_sheet(title="DATASETS")
-    ws_datasets.append(["ACTION", "TC_PATH", "TC_NAME", "DATASET_NAME", "PARAM_NAME", "PARAM_VALUE"])
-    
+    ws_datasets.append(["ACTION", "TC_OWNER_PATH", "TC_DATASET_NAME", "TC_DATASET_PARAM_NAME", "TC_DATASET_PARAM_VALUE"])
+
     ws_links = wb.create_sheet(title="LINK_REQ_TC")
-    ws_links.append(["ACTION", "TC_PATH", "TC_NAME", "REQ_PATH", "REQ_VERSION_NUM"])
+    ws_links.append(["ACTION", "REQ_PATH", "REQ_VERSION_NUM", "TC_PATH", "TC_NAME"])
     
     # Map and write test cases
     for tc in test_cases:
@@ -263,10 +263,10 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         for step in tc["steps"]:
             ws_steps.append([
                 "C",                     # ACTION
-                squash_path,             # TC_PATH
+                squash_path,             # TC_OWNER_PATH
                 tc["name"],              # TC_NAME
-                clean_html(step["action"]), # STEP_ACTION
-                clean_html(step["expected"]) # STEP_EXPECTED_RESULT
+                clean_html(step["action"]),   # STEP_ACTION
+                clean_html(step["expected"])  # STEP_EXPECTED_RESULT
             ])
             
     # Save file
