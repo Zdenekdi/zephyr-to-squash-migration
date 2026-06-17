@@ -48,6 +48,18 @@ jobs:
             exit 1
           }
 
+      - name: Copy README and env example next to EXE
+        run: |
+          Copy-Item ".env.example" "dist\.env.example"
+          Copy-Item "README.md" "dist\README.md"
+
+      - name: Package EXE into ZIP (browsers block .exe less aggressively)
+        run: |
+          Compress-Archive -Path "dist\ZephyrToSquash.exe", "dist\.env.example", "dist\README.md" `
+            -DestinationPath "dist\ZephyrToSquash-windows.zip"
+          $size = (Get-Item "dist\ZephyrToSquash-windows.zip").Length / 1MB
+          Write-Host "OK: ZephyrToSquash-windows.zip ($([math]::Round($size,1)) MB)"
+
       - name: Determine release tag
         id: get_tag
         shell: bash
@@ -58,31 +70,54 @@ jobs:
             echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Release and upload EXE
+      - name: Create GitHub Release and upload artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
           name: "Zephyr → Squash TM Tool ${{ steps.get_tag.outputs.tag }}"
           body: |
-            ## 🚀 Zephyr to Squash TM Migration Tool
+            ## 🚀 Zephyr to Squash TM Migration Tool ${{ steps.get_tag.outputs.tag }}
 
-            ### Stažení pro Windows
-            Stáhněte soubor **`ZephyrToSquash.exe`** níže a spusťte ho dvojklikem.
+            ### ⬇️ Stažení pro Windows
+
+            | Soubor | Popis |
+            |---|---|
+            | **`ZephyrToSquash-windows.zip`** | ✅ Doporučeno – ZIP archiv, prohlížeče ho blokují méně |
+            | `ZephyrToSquash.exe` | Přímý spustitelný soubor |
+
             **Python není potřeba instalovat** – vše je součástí souboru.
 
-            ### Co nástroj umí
-            - **Online API migrace**: přímý přenos testů ze Zephyr Scale do Squash TM přes REST API
-            - **Offline Excel konverze**: převod exportovaného Excel souboru ze Zephyru na importní soubor pro Squash TM
+            ---
 
-            ### První spuštění
-            Windows Defender může zobrazit varování „Neznámý vydavatel". Klikněte na **Další informace → Přesto spustit**.
-            Toto je běžné chování pro unsigned aplikace.
+            ### ⚠️ Jak obejít varování prohlížeče (Edge / Chrome)
+
+            Prohlížeče mohou zobrazit varování při stahování `.exe`. Aplikace je bezpečná – varování se zobrazuje proto, že soubor není komerčně podepsán.
+
+            **Edge:**
+            1. Klikněte na `...` vedle staženého souboru → **Ponechat**
+            2. Klikněte na **Zobrazit více** → **Přesto ponechat**
+
+            **Chrome:**
+            1. Klikněte na šipku ▾ vedle staženého souboru → **Ponechat**
+
+            **Windows SmartScreen** (při spuštění):
+            1. Klikněte na **Další informace**
+            2. Klikněte na **Přesto spustit**
+
+            > Soubor je generován automaticky z [open-source kódu](https://github.com/Zdenekdi/zephyr-to-squash-migration) přes GitHub Actions – každý si může ověřit, co obsahuje.
+
+            ---
+
+            ### Co nástroj umí
+            - **Online API migrace** – přímý přenos testů ze Zephyr Scale do Squash TM přes REST API
+            - **Offline Excel konverze** – převod exportovaného Excel souboru ze Zephyru na importní soubor pro Squash TM
 
             ### Konfigurace
             Při prvním spuštění vyplňte přihlašovací údaje přímo v GUI.
-            Volitelně můžete vedle `.exe` umístit soubor `.env` s předvyplněnými hodnotami (viz `.env.example`).
+            Volitelně umístěte vedle `.exe` soubor `.env` (šablona je přibalena v ZIP).
           draft: false
           prerelease: false
           generate_release_notes: false
           files: |
+            dist/ZephyrToSquash-windows.zip
             dist/ZephyrToSquash.exe
