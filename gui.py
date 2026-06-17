@@ -276,7 +276,9 @@ class MigrationGUI:
         form_frame = tk.Frame(self.tab_offline, bg=BG_CARD, padx=15, pady=15)
         form_frame.pack(fill=tk.BOTH, expand=True)
 
-        form_frame.columnconfigure(1, weight=1)
+        form_frame.columnconfigure(0, weight=0, minsize=195)
+        form_frame.columnconfigure(1, weight=3)
+        form_frame.columnconfigure(2, weight=0, minsize=140)
 
         lbl_offline = ttk.Label(form_frame, text="Offline konverze souborů",
                                  style="Header.TLabel")
@@ -349,18 +351,23 @@ class MigrationGUI:
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
         )
-        self.entry_folder_name.grid(row=6, column=1, sticky=tk.EW, padx=10, pady=5)
+        self.entry_folder_name.grid(row=6, column=1, sticky=tk.EW, padx=10, pady=(5, 0))
         self.entry_folder_name.insert(0, "Importovane_testy")
-        ttk.Label(form_frame, text="(Squash TM vyžaduje složku – nelze importovat přímo do projektu)",
-                  foreground=FG_MUTED).grid(row=6, column=2, sticky=tk.W)
+        # Varovní – na vlastním řádku pod polem
+        ttk.Label(
+            form_frame,
+            text="⚠️  Složka musí existovat v Squash TM ještě PŘED importem. Squash TM ji nevytvoří automaticky.",
+            foreground="#f59e0b",
+            font=(FONT_MAIN, 8)
+        ).grid(row=7, column=0, columnspan=3, sticky=tk.W, padx=(10, 0), pady=(0, 8))
 
         # Tlačítko start
         btn_start_offline = ttk.Button(
             form_frame, text="Převést Excel soubor",
             style="Success.TButton", command=self.run_offline_conversion
         )
-        btn_start_offline.grid(row=7, column=0, columnspan=3,
-                               pady=(30, 0), sticky=tk.E)
+        btn_start_offline.grid(row=8, column=0, columnspan=3,
+                               pady=(20, 0), sticky=tk.E)
 
     # --------------------------------------------------------------------------- #
     # Pomocné metody pro formuláře                                                #
