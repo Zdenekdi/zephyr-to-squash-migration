@@ -206,23 +206,29 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
         for i, h in unmapped:
             print(f"  Sloupec {i+1}: {repr(h)}")
 
-    # Check for mandatory columns
-    mandatory = ["name"]
-    missing = [m for m in mandatory if m not in mapping]
-    if missing:
-        print(f"\nChyba: Nepodařilo se namapovat povinná pole: {missing}")
-        print("Ujistěte se, že export ze Zephyru obsahuje správné záhlaví.")
-        sys.exit(1)
-        
+    # Pokud "name" nenalezeno – varujeme, ale NEPŘERUŠUJEME (použijeme key jako fallback)
+    if "name" not in mapping:
+        if "key" in mapping:
+            print("\nVarování: Sloupec s názvem testu (Summary/Name) nenalezen.")
+            print("  Jako název testu bude použit klíč (Issue Key / TC_REFERENCE).")
+        else:
+            print("\nChyba: Nepodařilo se namapovat ani název (name) ani klíč (key).")
+            print("  Ujistěte se, že soubor je Zephyr export (ne již konvertovaný soubor).")
+            sys.exit(1)
+
     test_cases = []
     current_tc = None
-    
+
     for row_idx in range(2, sheet.max_row + 1):
         row = [sheet.cell(row=row_idx, column=col_idx + 1).value for col_idx in range(len(headers))]
-        
+
         # Read fields
         tc_key = str(row[mapping["key"]]).strip() if "key" in mapping and row[mapping["key"]] is not None else ""
-        tc_name = str(row[mapping["name"]]).strip() if row[mapping["name"]] is not None else ""
+        # Název: ze sloupce name, nebo fallback na key
+        if "name" in mapping and row[mapping["name"]] is not None:
+            tc_name = str(row[mapping["name"]]).strip()
+        else:
+            tc_name = ""  # fallback se provede níže přes tc_display_name
         
         # If we find a new test case key or name, we start a new test case
         is_new_tc = False
