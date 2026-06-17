@@ -285,17 +285,21 @@ class MigrationGUI:
         # Vstupní soubor
         dnd_hint = " (nebo sem přetáhněte soubor)" if TKDND_AVAILABLE else ""
         ttk.Label(form_frame, text=f"Zephyr export (.xlsx){dnd_hint}:").grid(
-            row=1, column=0, sticky=tk.W, pady=5)
+            row=1, column=0, sticky=tk.W, pady=(5, 0))
         self.entry_input_file = tk.Entry(
             form_frame, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
         )
-        self.entry_input_file.grid(row=1, column=1, sticky=tk.EW, padx=10, pady=5)
+        self.entry_input_file.grid(row=1, column=1, sticky=tk.EW, padx=10, pady=(5, 0))
         btn_browse_in = ttk.Button(form_frame, text="Procházet...",
                                    command=self.browse_input_file)
-        btn_browse_in.grid(row=1, column=2, pady=5)
+        btn_browse_in.grid(row=1, column=2, pady=(5, 0))
+        # Label zobrazující jen název souboru (viditelný i při dlouhé cestě)
+        self.lbl_input_filename = ttk.Label(form_frame, text="(žádný soubor nevybrán)",
+                                             foreground="#e0a020", font=("Segoe UI", 9, "bold"))
+        self.lbl_input_filename.grid(row=2, column=1, sticky=tk.W, padx=10, pady=(0, 5))
 
         # Registrace drag & drop na vstupní pole
         if TKDND_AVAILABLE:
@@ -304,55 +308,58 @@ class MigrationGUI:
             self.entry_input_file.dnd_bind("<<DragEnter>>", self._on_drag_enter)
             self.entry_input_file.dnd_bind("<<DragLeave>>", self._on_drag_leave)
 
+
         # Výstupní soubor
         ttk.Label(form_frame, text="Squash import (.xlsx):").grid(
-            row=2, column=0, sticky=tk.W, pady=5)
+            row=3, column=0, sticky=tk.W, pady=(5, 0))
         self.entry_output_file = tk.Entry(
             form_frame, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
         )
-        self.entry_output_file.grid(row=2, column=1, sticky=tk.EW, padx=10, pady=5)
+        self.entry_output_file.grid(row=3, column=1, sticky=tk.EW, padx=10, pady=(5, 0))
         self.entry_output_file.insert(0, "squash_import.xlsx")
         btn_browse_out = ttk.Button(form_frame, text="Uložit jako...",
                                     command=self.browse_output_file)
-        btn_browse_out.grid(row=2, column=2, pady=5)
+        btn_browse_out.grid(row=3, column=2, pady=(5, 0))
+        self.lbl_output_filename = ttk.Label(form_frame, text="squash_import.xlsx",
+                                              foreground="#20a060", font=("Segoe UI", 9, "bold"))
+        self.lbl_output_filename.grid(row=4, column=1, sticky=tk.W, padx=10, pady=(0, 5))
 
         # Název projektu Squash
         ttk.Label(form_frame, text="Název projektu ve Squash:").grid(
-            row=3, column=0, sticky=tk.W, pady=5)
+            row=5, column=0, sticky=tk.W, pady=5)
         self.entry_proj_name = tk.Entry(
             form_frame, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
         )
-        self.entry_proj_name.grid(row=3, column=1, sticky=tk.EW, padx=10, pady=5)
+        self.entry_proj_name.grid(row=5, column=1, sticky=tk.EW, padx=10, pady=5)
         default_proj = os.getenv("ZEPHYR_PROJECT_KEY") or "Imported_Project"
         self.entry_proj_name.insert(0, default_proj)
 
         # Název cílové složky
         ttk.Label(form_frame, text="Cílová složka ve Squash:").grid(
-            row=4, column=0, sticky=tk.W, pady=5)
+            row=6, column=0, sticky=tk.W, pady=5)
         self.entry_folder_name = tk.Entry(
             form_frame, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
         )
-        self.entry_folder_name.grid(row=4, column=1, sticky=tk.EW, padx=10, pady=5)
+        self.entry_folder_name.grid(row=6, column=1, sticky=tk.EW, padx=10, pady=5)
         self.entry_folder_name.insert(0, "Importovane_testy")
-        ttk.Label(form_frame, text="(podsložka kam půjdou testy, musí existovat nebo bude vytvořena)",
-                  foreground=FG_MUTED).grid(row=4, column=2, sticky=tk.W)
-
+        ttk.Label(form_frame, text="(podsložka kam půjdou testy)",
+                  foreground=FG_MUTED).grid(row=6, column=2, sticky=tk.W)
 
         # Tlačítko start
         btn_start_offline = ttk.Button(
             form_frame, text="Převést Excel soubor",
             style="Success.TButton", command=self.run_offline_conversion
         )
-        btn_start_offline.grid(row=5, column=0, columnspan=3,
+        btn_start_offline.grid(row=7, column=0, columnspan=3,
                                pady=(30, 0), sticky=tk.E)
 
     # --------------------------------------------------------------------------- #
@@ -390,6 +397,9 @@ class MigrationGUI:
         if path:
             self.entry_input_file.delete(0, tk.END)
             self.entry_input_file.insert(0, path)
+            self.entry_input_file.xview_moveto(1.0)  # scroll na konec = viditelný název souboru
+            fname = os.path.basename(path)
+            self.lbl_input_filename.configure(text=f"✓  {fname}")
 
     def _on_drop_input_file(self, event):
         """Handler pro drag & drop souboru na vstupní pole."""
@@ -423,6 +433,9 @@ class MigrationGUI:
         if path:
             self.entry_output_file.delete(0, tk.END)
             self.entry_output_file.insert(0, path)
+            self.entry_output_file.xview_moveto(1.0)
+            fname = os.path.basename(path)
+            self.lbl_output_filename.configure(text=fname)
 
     # --------------------------------------------------------------------------- #
     # Spouštění procesů na pozadí                                                 #
