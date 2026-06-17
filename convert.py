@@ -55,13 +55,22 @@ IMPORTANCE_MAP = {
 }
 
 # Status mapping (Zephyr -> Squash TM)
+# Použity jen hodnoty které Squash TM bezpečně přijímá: WORK_IN_PROGRESS a APPROVED
 STATUS_MAP = {
-    "approved": "APPROVED",
-    "draft": "WORK_IN_PROGRESS",
-    "underreview": "UNDER_REVISION",
-    "underrevision": "UNDER_REVISION",
-    "obsolete": "OBSOLETE"
+    "approved":      "APPROVED",
+    "done":          "APPROVED",
+    "pass":          "APPROVED",
+    "passed":        "APPROVED",
+    "draft":         "WORK_IN_PROGRESS",
+    "inprogress":    "WORK_IN_PROGRESS",
+    "underreview":   "WORK_IN_PROGRESS",
+    "underrevision": "WORK_IN_PROGRESS",
+    "inreview":      "WORK_IN_PROGRESS",
+    "obsolete":      "WORK_IN_PROGRESS",
+    "deprecated":    "WORK_IN_PROGRESS",
+    "wip":           "WORK_IN_PROGRESS",
 }
+STATUS_DEFAULT = "WORK_IN_PROGRESS"
 
 def clean_header(val) -> str:
     """Removes all non-alphanumeric characters and lowercases the string."""
@@ -342,9 +351,9 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         else:
             squash_path = f"/{project_clean}/Importovane_testy"
 
-        # Status mapping – default WORK_IN_PROGRESS (bezpečnější než UNDER_REVISION)
+        # Status mapping – použij jen bezpečné hodnoty
         cleaned_status = clean_header(tc["status"])
-        squash_status = STATUS_MAP.get(cleaned_status, "WORK_IN_PROGRESS")
+        squash_status = STATUS_MAP.get(cleaned_status, STATUS_DEFAULT)
 
         # Weight (importance) mapping – TC_WEIGHT dle template
         cleaned_priority = clean_header(tc["priority"])
