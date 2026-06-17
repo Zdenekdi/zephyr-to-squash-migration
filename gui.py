@@ -350,8 +350,8 @@ class MigrationGUI:
             highlightbackground=COLOR_BORDER
         )
         self.entry_folder_name.grid(row=6, column=1, sticky=tk.EW, padx=10, pady=5)
-        # Prázdné = testy jdou přímo do kořene projektu (TC_PATH = /NazevProjektu)
-        ttk.Label(form_frame, text="(nechat prázdné = přímo do projektu, bez podsložky)",
+        self.entry_folder_name.insert(0, "Importovane_testy")
+        ttk.Label(form_frame, text="(Squash TM vyžaduje složku – nelze importovat přímo do projektu)",
                   foreground=FG_MUTED).grid(row=6, column=2, sticky=tk.W)
 
         # Tlačítko start
@@ -493,7 +493,15 @@ class MigrationGUI:
         in_file = self.entry_input_file.get().strip()
         out_file = self.entry_output_file.get().strip()
         proj_name = self.entry_proj_name.get().strip()
-        folder_name = self.entry_folder_name.get().strip()  # prázdné = bez podsložky
+        folder_name = self.entry_folder_name.get().strip()
+        if not folder_name:
+            messagebox.showerror(
+                "Chyba – chybí název složky",
+                "Squash TM vyžaduje alespoň jednu podsložku.\n"
+                "Cesta '/EDAZ' sama o sobě je neplatná (ill-formed).\n\n"
+                "Zadejte název složky, např. 'Importovane_testy'."
+            )
+            return
 
         if not in_file:
             messagebox.showerror("Chyba", "Vyberte vstupní soubor ze Zephyru.")
