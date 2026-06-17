@@ -16,17 +16,25 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 
 # Zephyr Scale Excel header search patterns (cleaned alphanumeric lowercase)
+# Zephyr Scale může exportovat sloupce různými názvy podle verze a nastavení
 ZEPHYR_MAPPINGS = {
-    "key": ["key", "id", "testcasekey", "issuekey", "tcjikey", "tckey"],
-    "name": ["name", "summary", "title", "subject", "tcname"],
-    "folder": ["folder", "folderpath", "path", "tcfolder"],
-    "status": ["status", "state", "tcstatus"],
-    "priority": ["priority", "priorityname", "importance", "tcpriority"],
-    "objective": ["objective", "description", "details", "tcobjective", "tcdescription"],
-    "precondition": ["precondition", "preconditions", "prerequisites", "prerequisite", "tcprecondition"],
-    "step_action": ["testscriptstepbystepstep", "step", "stepdescription", "action", "stepaction", "stepname"],
-    "step_data": ["testscriptstepbysteptestdata", "testdata", "data", "stepdata"],
-    "step_expected": ["testscriptstepbystepexpectedresult", "expectedresult", "expected", "stepexpectedresult", "expectedresults"]
+    "key":          ["key", "id", "testcasekey", "issuekey", "tcjikey", "tckey", "jiratckey"],
+    "name":         ["name", "summary", "title", "subject", "tcname",
+                     "testcasename", "testname", "casename", "issuename", "testcasetitle"],
+    "folder":       ["folder", "folderpath", "path", "tcfolder", "component",
+                     "testfolder", "suitepath", "module"],
+    "status":       ["status", "state", "tcstatus", "teststatus"],
+    "priority":     ["priority", "priorityname", "importance", "tcpriority", "severity"],
+    "objective":    ["objective", "description", "details", "tcobjective", "tcdescription",
+                     "testdescription", "goal"],
+    "precondition": ["precondition", "preconditions", "prerequisites", "prerequisite",
+                     "tcprecondition", "setup", "prereq"],
+    "step_action":  ["testscriptstepbystepstep", "step", "stepdescription", "action",
+                     "stepaction", "stepname", "teststep", "testaction", "steppbystepstep"],
+    "step_data":    ["testscriptstepbysteptestdata", "testdata", "data", "stepdata",
+                     "inputdata", "parameters"],
+    "step_expected":["testscriptstepbystepexpectedresult", "expectedresult", "expected",
+                     "stepexpectedresult", "expectedresults", "result", "expectedoutput"]
 }
 
 # Importance mapping (Zephyr -> Squash TM)
@@ -55,15 +63,59 @@ def clean_header(val) -> str:
         return ""
     return "".join(c for c in str(val).lower() if c.isalnum())
 
+def clean_wiki_markup(text: str) -> str:
+    """Removes Confluence/Jira wiki markup from text.
+    
+    Handles: image refs, links, bold, headings, panels, code blocks, horizontal rules.
+    """
+    if not text:
+        return text
+    t = text
+
+    # Confluence image markup – různé formáty:
+    # !image.png!  nebo  !image.png|thumbnail!  nebo  !image.png|width=500,alt="..."!
+    t = re.sub(r'![^\n!]+\.(?:png|jpg|jpeg|gif|svg|bmp|webp)[^\n!]*!', '', t, flags=re.IGNORECASE)
+    # |image-xyz.png|width=658,alt="..."|  (celý token od | do | včetně příloh za jménem)
+    t = re.sub(r'\|[^\|\n]*\.(?:png|jpg|jpeg|gif|svg|bmp|webp)[^\|\n]*\|(?:[^\|\n]*\|)?', '', t, flags=re.IGNORECASE)
+
+    # Confluence link: [text|http://url] nebo [http://url]
+    t = re.sub(r'\[([^|\]]+)\|https?://[^\]]+\]', r'\1', t)   # [text|url] → text
+    t = re.sub(r'\[https?://[^\]]+\]', '', t)                   # [url] → odstraň
+
+    # Confluence bold/italic: *text* → text,  _text_ → text
+    t = re.sub(r'\*([^*\n]+)\*', r'\1', t)
+    t = re.sub(r'_([^_\n]+)_', r'\1', t)
+
+    # Confluence nadpisy: h1. h2. ...
+    t = re.sub(r'^h[1-6]\.\s*', '', t, flags=re.MULTILINE)
+
+    # Confluence code: {code}...{code} nebo {noformat}...{noformat}
+    t = re.sub(r'\{code[^}]*\}.*?\{code\}', '[kód]', t, flags=re.DOTALL)
+    t = re.sub(r'\{noformat[^}]*\}.*?\{noformat\}', '[text]', t, flags=re.DOTALL)
+
+    # Confluence panely a makra: {panel:...} {info} {note} {warning}
+    t = re.sub(r'\{[a-zA-Z][^}]*\}', '', t)
+
+    # Vícenásobné prázdné řádky → jeden
+    t = re.sub(r'\n{3,}', '\n\n', t)
+
+    return t.strip()
+
+
 def clean_html(text: str) -> str:
-    """Ensures basic formatting and safe HTML representation."""
+    """Cleans Confluence wiki markup and converts plain text to HTML paragraphs."""
     if not text:
         return ""
     text_str = str(text).strip()
-    # If it's already HTML (starts with < and ends with >), keep it
+
+    # Nejdřív odstraň Confluence wiki markup
+    text_str = clean_wiki_markup(text_str)
+
+    # Pokud je to čisté HTML, vrať beze změny
     if text_str.startswith("<") and text_str.endswith(">"):
         return text_str
-    # Replace newlines with <br> and wrap in paragraphs
+
+    # Převeď plain text na HTML odstavce
     paragraphs = text_str.split("\n\n")
     html_p = []
     for p in paragraphs:
@@ -165,10 +217,13 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
         if is_new_tc:
             if current_tc:
                 test_cases.append(current_tc)
-                
+
+            # Fallback pro název: pokud je prázdný, použijeme klíč (napr. EDAZ-123)
+            tc_display_name = tc_name or tc_key or f"TC_{row_idx}"
+
             current_tc = {
                 "key": tc_key,
-                "name": tc_name,
+                "name": tc_display_name,
                 "folder": sanitize_path(row[mapping["folder"]]) if "folder" in mapping and row[mapping["folder"]] is not None else "",
                 "status": str(row[mapping["status"]]).strip() if "status" in mapping and row[mapping["status"]] is not None else "",
                 "priority": str(row[mapping["priority"]]).strip() if "priority" in mapping and row[mapping["priority"]] is not None else "",
