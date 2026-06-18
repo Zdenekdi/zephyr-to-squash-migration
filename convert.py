@@ -368,6 +368,12 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
             # Prázdná složka – testy jdou přímo do kořene projektu
             squash_path = f"/{project_clean}"
 
+        # TC_PATH musí být PLNÁ cesta včetně jména testu!
+        # Squash TM bere poslední segment TC_PATH jako jméno testu.
+        # Pokud je TC_PATH = /EDAZ/Slozka → test se pojmenuje "Slozka" (BUG!)
+        # Správně:  TC_PATH = /EDAZ/Slozka/NazevTestu → vytvoří složku + pojmenuje správně
+        tc_full_path = f"{squash_path}/{tc['name']}"
+
         # Status mapping – použij jen bezpečné hodnoty
         cleaned_status = clean_header(tc["status"])
         squash_status = STATUS_MAP.get(cleaned_status, STATUS_DEFAULT)
@@ -381,30 +387,24 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
         precondition_html = clean_html(tc["precondition"])
 
         # TEST_CASES řádek
-        # TC_REFERENCE je záměrně prázdné (None) – pokud by Squash TM evidoval
-        # staré testy se stejným TC_REFERENCE pod jiným názvem, vzniká chyba
-        # "inconsistent". Klíč Zephyru ukládáme do popisu pro dohledatelnost.
         key_note = f'<p><strong>Zephyr key: {tc["key"]}</strong></p>\n' if tc['key'] else ''
         ws_tc.append([
             "C",                  # ACTION
-            squash_path,          # TC_PATH
+            tc_full_path,         # TC_PATH = /EDAZ/Složka/NázevTestu  ← OPRAVENO
             None,                 # TC_NUM
-            None,                 # TC_REFERENCE – prázdné záměrně (viz výše)
-            tc["name"],           # TC_NAME
+            None,                 # TC_REFERENCE – prázdné záměrně
+            tc["name"],           # TC_NAME = NázevTestu (musí odpovídat posl. segmentu TC_PATH)
             squash_weight,        # TC_WEIGHT
             squash_status,        # TC_STATUS
-            key_note + description_html,  # TC_DESCRIPTION (klíč + popis)
+            key_note + description_html,  # TC_DESCRIPTION
             precondition_html,    # TC_PRE_REQUISITE
         ])
 
-        # STEPS řádky
-        # TC_OWNER_PATH musí být PLNÁ cesta testu = složka + název testu
-        # Squash TM matchuje kroky k testům přes tuto cestu
-        tc_full_path = f"{squash_path}/{tc['name']}"
+        # STEPS řádky – TC_OWNER_PATH = stejná plná cesta jako TC_PATH
         for step_num, step in enumerate(tc["steps"], start=1):
             ws_steps.append([
                 "C",                              # ACTION
-                tc_full_path,                     # TC_OWNER_PATH = /EDAZ/Složka/Název testu
+                tc_full_path,                     # TC_OWNER_PATH = /EDAZ/Složka/NázevTestu
                 step_num,                         # TC_STEP_NUM
                 clean_html(step["action"]),       # TC_STEP_ACTION
                 clean_html(step["expected"]),     # TC_STEP_EXPECTED_RESULT
