@@ -13,6 +13,7 @@ Předpoklady:
 
 import logging
 import sys
+import time
 from typing import Optional
 
 import requests
@@ -266,6 +267,7 @@ def migrate_tests(
         migrate_steps(zephyr, squash, test_key, squash_test_id, inline_steps)
 
         migrated += 1
+        time.sleep(0.05)   # rate limiting – předejdeme HTTP 429
 
     return migrated, skipped, errors
 

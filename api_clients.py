@@ -77,13 +77,11 @@ class ZephyrClient:
         """
         GET /folders?projectKey={key}&folderType=TEST_CASE
 
-        Příklad odpovědi:
-        [
-          {"id": 1, "name": "Modul A",    "parentId": null},
-          {"id": 2, "name": "Podmodul B", "parentId": 1}
-        ]
+        Zephyr Scale vrací stránkovaný objekt:
+          {"startAt": 0, "maxResults": 1000, "total": N, "values": [...]}
+        nebo (starší verze) přímý seznam.
         """
-        return self._request(
+        data = self._request(
             "GET",
             "/folders",
             params={
@@ -92,6 +90,10 @@ class ZephyrClient:
                 "maxResults": 1000,
             },
         )
+        # Stránkovaná odpověď → extrahuj seznam ze "values"
+        if isinstance(data, dict):
+            return data.get("values", [])
+        return data if isinstance(data, list) else []
 
     # ----------------------------------------------------------------------- #
     # Zephyr: Testy (se stránkováním)                                          #
@@ -196,11 +198,26 @@ class SquashClient:
         GET /projects/{projectId}/test-case-libraries
         Vrátí ID kořenové složky (knihovny testů) projektu.
 
-        Odpověď (HAL formát):
-          {"id": 42, "name": "...", "_type": "test-case-library", ...}
+        Squash TM může vrátit:
+          a) Přímý objekt:  {"id": 42, ...}
+          b) HAL-embedded:  {"_embedded": {"test-case-libraries": [{"id": 42, ...}]}}
         """
         data = self._request("GET", f"/projects/{config.SQUASH_PROJECT_ID}/test-case-libraries")
-        return data["id"]
+        # a) Přímý objekt
+        if isinstance(data, dict) and "id" in data:
+            return data["id"]
+        # b) HAL-embedded
+        if isinstance(data, dict):
+            libs = data.get("_embedded", {}).get("test-case-libraries", [])
+            if libs:
+                return libs[0]["id"]
+        # c) Přímý seznam
+        if isinstance(data, list) and data:
+            return data[0]["id"]
+        raise ValueError(
+            f"Nepodařilo se získat ID kořenové složky Squash projektu. "
+            f"Odpověď API: {data}"
+        )
 
     # ----------------------------------------------------------------------- #
     # Squash: Obsah složky                                                     #
@@ -209,13 +226,21 @@ class SquashClient:
         """
         GET /test-case-folders/{folderId}/content
 
-        Squash vrací HAL:
-          {"_embedded": {"items": [...]}}
-        kde každý item má '_type': 'test-case-folder' nebo 'test-case'.
+        Squash TM vrací HAL s klíčem '_embedded'.
+        Klíč v _embedded se může lišit dle verze: 'items', 'test-cases', 'content'.
         """
         data = self._request("GET", f"/test-case-folders/{folder_id}/content")
         embedded = data.get("_embedded", {})
-        return embedded.get("items", embedded.get("test-cases", []))
+        # Zkusíme postupně všechny známé klíče
+        for key in ("items", "test-cases", "test-case-folders", "content"):
+            if key in embedded:
+                return embedded[key]
+        # Fallback: vrátíme vše co je v _embedded dohromady
+        result = []
+        for v in embedded.values():
+            if isinstance(v, list):
+                result.extend(v)
+        return result
 
     # ----------------------------------------------------------------------- #
     # Squash: Vytvoření složky (idempotentní)                                  #
