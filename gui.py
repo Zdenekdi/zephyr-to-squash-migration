@@ -80,7 +80,8 @@ class MigrationGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Zephyr Scale ➔ Squash TM Migration Tool")
-        self.root.geometry("850x750")
+        self.root.geometry("1000x750")
+        self.root.minsize(880, 600)
         self.root.configure(bg=BG_MAIN)
         self.root.resizable(True, True)
 
@@ -178,6 +179,11 @@ class MigrationGUI:
                                    highlightbackground=COLOR_BORDER, highlightthickness=1)
         self.tab_offline = tk.Frame(self.notebook, bg=BG_CARD,
                                     highlightbackground=COLOR_BORDER, highlightthickness=1)
+        # Záložky musí mít nastavenou expanzi aby se form_frame roztáhl na plnou šíři
+        self.tab_online.columnconfigure(0, weight=1)
+        self.tab_online.rowconfigure(0, weight=1)
+        self.tab_offline.columnconfigure(0, weight=1)
+        self.tab_offline.rowconfigure(0, weight=1)
 
         self.notebook.add(self.tab_online, text=" Online API migrace ")
         self.notebook.add(self.tab_offline, text=" Offline Excel konverze ")
@@ -289,7 +295,7 @@ class MigrationGUI:
         ttk.Label(form_frame, text=f"Zephyr export (.xlsx){dnd_hint}:").grid(
             row=1, column=0, sticky=tk.W, pady=(5, 0))
         self.entry_input_file = tk.Entry(
-            form_frame, bg=BG_INPUT, fg=FG_TEXT,
+            form_frame, width=50, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
@@ -315,7 +321,7 @@ class MigrationGUI:
         ttk.Label(form_frame, text="Squash import (.xlsx):").grid(
             row=3, column=0, sticky=tk.W, pady=(5, 0))
         self.entry_output_file = tk.Entry(
-            form_frame, bg=BG_INPUT, fg=FG_TEXT,
+            form_frame, width=50, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
@@ -333,7 +339,7 @@ class MigrationGUI:
         ttk.Label(form_frame, text="Název projektu ve Squash:").grid(
             row=5, column=0, sticky=tk.W, pady=5)
         self.entry_proj_name = tk.Entry(
-            form_frame, bg=BG_INPUT, fg=FG_TEXT,
+            form_frame, width=50, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
@@ -346,18 +352,17 @@ class MigrationGUI:
         ttk.Label(form_frame, text="Cílová složka ve Squash:").grid(
             row=6, column=0, sticky=tk.W, pady=5)
         self.entry_folder_name = tk.Entry(
-            form_frame, bg=BG_INPUT, fg=FG_TEXT,
+            form_frame, width=50, bg=BG_INPUT, fg=FG_TEXT,
             insertbackground="#ffffff", borderwidth=0,
             highlightthickness=1, highlightcolor=COLOR_ACCENT,
             highlightbackground=COLOR_BORDER
         )
         self.entry_folder_name.grid(row=6, column=1, sticky=tk.EW, padx=10, pady=(5, 0))
         self.entry_folder_name.insert(0, "Importovane_testy")
-        # Varovní – na vlastním řádku pod polem
         ttk.Label(
             form_frame,
-            text="⚠️  Složka musí existovat v Squash TM ještě PŘED importem. Squash TM ji nevytvoří automaticky.",
-            foreground="#f59e0b",
+            text="ℹ️  Složka bude v Squash TM vytvořena automaticky při importu.",
+            foreground="#60a5fa",
             font=(FONT_MAIN, 8)
         ).grid(row=7, column=0, columnspan=3, sticky=tk.W, padx=(10, 0), pady=(0, 8))
 
