@@ -79,6 +79,12 @@ def clean_header(val) -> str:
         return ""
     return "".join(c for c in str(val).lower() if c.isalnum())
 
+def normalize_imported_text(val) -> str:
+    """Normalizes imported text values for Squash export."""
+    if val is None:
+        return ""
+    return str(val).replace("/", "\\")
+
 def clean_wiki_markup(text: str) -> str:
     """Removes Confluence/Jira wiki markup from text.
     
@@ -233,10 +239,10 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
         row = [sheet.cell(row=row_idx, column=col_idx + 1).value for col_idx in range(len(headers))]
 
         # Read fields
-        tc_key = str(row[mapping["key"]]).strip() if "key" in mapping and row[mapping["key"]] is not None else ""
+        tc_key = normalize_imported_text(row[mapping["key"]]).strip() if "key" in mapping and row[mapping["key"]] is not None else ""
         # Název: ze sloupce name, nebo fallback na key
         if "name" in mapping and row[mapping["name"]] is not None:
-            tc_name = str(row[mapping["name"]]).strip()
+            tc_name = normalize_imported_text(row[mapping["name"]]).strip()
         else:
             tc_name = ""  # fallback se provede níže přes tc_display_name
         
@@ -262,17 +268,17 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
                 "key": tc_key,
                 "name": tc_display_name,
                 "folder": sanitize_path(row[mapping["folder"]]) if "folder" in mapping and row[mapping["folder"]] is not None else "",
-                "status": str(row[mapping["status"]]).strip() if "status" in mapping and row[mapping["status"]] is not None else "",
-                "priority": str(row[mapping["priority"]]).strip() if "priority" in mapping and row[mapping["priority"]] is not None else "",
-                "objective": str(row[mapping["objective"]]).strip() if "objective" in mapping and row[mapping["objective"]] is not None else "",
-                "precondition": str(row[mapping["precondition"]]).strip() if "precondition" in mapping and row[mapping["precondition"]] is not None else "",
+                "status": normalize_imported_text(row[mapping["status"]]).strip() if "status" in mapping and row[mapping["status"]] is not None else "",
+                "priority": normalize_imported_text(row[mapping["priority"]]).strip() if "priority" in mapping and row[mapping["priority"]] is not None else "",
+                "objective": normalize_imported_text(row[mapping["objective"]]).strip() if "objective" in mapping and row[mapping["objective"]] is not None else "",
+                "precondition": normalize_imported_text(row[mapping["precondition"]]).strip() if "precondition" in mapping and row[mapping["precondition"]] is not None else "",
                 "steps": []
             }
             
         # Extract steps for current test case
-        step_act = str(row[mapping["step_action"]]).strip() if "step_action" in mapping and row[mapping["step_action"]] is not None else ""
-        step_exp = str(row[mapping["step_expected"]]).strip() if "step_expected" in mapping and row[mapping["step_expected"]] is not None else ""
-        step_dat = str(row[mapping["step_data"]]).strip() if "step_data" in mapping and row[mapping["step_data"]] is not None else ""
+        step_act = normalize_imported_text(row[mapping["step_action"]]).strip() if "step_action" in mapping and row[mapping["step_action"]] is not None else ""
+        step_exp = normalize_imported_text(row[mapping["step_expected"]]).strip() if "step_expected" in mapping and row[mapping["step_expected"]] is not None else ""
+        step_dat = normalize_imported_text(row[mapping["step_data"]]).strip() if "step_data" in mapping and row[mapping["step_data"]] is not None else ""
         
         # Zpracování kroků:
         # - Pokud má TestStep (step_act) hodnotu → nový krok
