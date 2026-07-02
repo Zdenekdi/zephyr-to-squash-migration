@@ -13,6 +13,13 @@ Podporuje dva režimy: **offline konverzi** (Excel → Excel) a **online migraci
 
 > Není třeba instalovat Python ani žádné závislosti.
 
+### ⚠️ Upozornění prohlížeče / Windows SmartScreen
+
+Vzhledem k tomu, že soubor nepoužívá drahý komerční certifikát, může vás prohlížeč nebo Windows varovat. Stačí provést následující:
+- **Microsoft Edge:** Klikněte na `...` (tři tečky u staženého souboru) → Ponechat → Zobrazit více → Přesto ponechat
+- **Google Chrome:** Klikněte na šipku u stažení `▾` → Ponechat
+- **Windows SmartScreen (modré okno při spuštění):** Klikněte na *Další informace* → *Přesto spustit*
+
 ---
 
 ## 📋 Záložka: Offline Excel konverze
