@@ -289,16 +289,20 @@ def parse_zephyr_excel(file_path: str) -> list[dict]:
                 # Nový krok
                 current_tc["steps"].append({
                     "action": step_act,
-                    "expected": step_exp
+                    "expected": step_exp,
+                    "data": step_dat,
                 })
-            elif step_exp:
-                # Pokračování – připoj k pošledjímu kroku
+            elif step_exp or step_dat:
+                # Pokračování – připoj k poslednímu kroku
                 if current_tc["steps"]:
                     prev = current_tc["steps"][-1]
-                    prev["expected"] = (prev["expected"] + "\n" + step_exp).strip()
+                    if step_exp:
+                        prev["expected"] = (prev["expected"] + "\n" + step_exp).strip()
+                    if step_dat:
+                        prev["data"] = (prev.get("data", "") + "\n" + step_dat).strip()
                 else:
-                    # Žádný předchozí krok – vytvoříme krok jen s výsledkem
-                    current_tc["steps"].append({"action": "", "expected": step_exp})
+                    # Žádný předchozí krok – vytvoříme krok jen s dostupnými poli
+                    current_tc["steps"].append({"action": "", "expected": step_exp, "data": step_dat})
             
     # Add the last test case
     if current_tc:
@@ -337,10 +341,11 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
     ])
 
     # 2. Sheet STEPS – TC_STEP_ACTION, TC_STEP_EXPECTED_RESULT, TC_STEP_NUM
+    # + optional custom field from Zephyr "Test Data"
     ws_steps = wb.create_sheet(title="STEPS")
     ws_steps.append([
         "ACTION", "TC_OWNER_PATH", "TC_STEP_NUM",
-        "TC_STEP_ACTION", "TC_STEP_EXPECTED_RESULT"
+        "TC_STEP_ACTION", "TC_STEP_EXPECTED_RESULT", "TC_STEP_CUF_TESTSTEPDATA"
     ])
 
     # 3. Sheet PARAMETERS – TC_PARAM_DESCRIPTION přidán dle template
@@ -414,6 +419,7 @@ def write_squash_excel(test_cases: list[dict], output_path: str, project_name: s
                 step_num,                         # TC_STEP_NUM
                 clean_html(step["action"]),       # TC_STEP_ACTION
                 clean_html(step["expected"]),     # TC_STEP_EXPECTED_RESULT
+                clean_html(step.get("data", "")),  # TC_STEP_CUF_TESTSTEPDATA (optional)
             ])
 
 
