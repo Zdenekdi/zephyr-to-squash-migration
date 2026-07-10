@@ -13,6 +13,13 @@ Podporuje dva režimy: **offline konverzi** (Excel → Excel) a **online migraci
 
 > Není třeba instalovat Python ani žádné závislosti.
 
+### ⚠️ Upozornění prohlížeče / Windows SmartScreen
+
+Vzhledem k tomu, že soubor nepoužívá drahý komerční certifikát, může vás prohlížeč nebo Windows varovat. Stačí provést následující:
+- **Microsoft Edge:** Klikněte na `...` (tři tečky u staženého souboru) → Ponechat → Zobrazit více → Přesto ponechat
+- **Google Chrome:** Klikněte na šipku u stažení `▾` → Ponechat
+- **Windows SmartScreen (modré okno při spuštění):** Klikněte na *Další informace* → *Přesto spustit*
+
 ---
 
 ## 📋 Záložka: Offline Excel konverze
@@ -177,7 +184,30 @@ SQUASH_PROJECT_ID=42
 
 ---
 
+## ❓ Časté dotazy (FAQ)
+
+**Q: Musím ve Squash TM předem vytvářet složku, do které chci importovat?**  
+**A:** Ne. Nástroj je nastaven tak, že Squash TM zadanou složku vytvoří automaticky během importu. Stačí ji pouze správně pojmenovat v grafickém rozhraní nástroje.
+
+**Q: V Zephyr exportu má jeden test více řádků (kvůli testovacím krokům). Jak si s tím nástroj poradí?**  
+**A:** Nástroj toto chování chápe. Pozná, že více řádků patří k jednomu testu a ve Squash TM z nich vytvoří jeden testovací případ s příslušným počtem seřazených kroků.
+
+**Q: Ztratím původní identifikátor (IssueKey) ze Zephyru?**  
+**A:** Neztratíte. Nástroj vezme původní Zephyr klíč a tučně ho vloží na úplný začátek popisu testu ve Squash TM (např. **Zephyr key: PROJ-T123**).
+
+**Q: Co se stane, když do nástroje zadám špatný název projektu pro Squash TM?**  
+**A:** Import do Squash TM pravděpodobně selže nebo se testy naimportují do špatného projektu. Nástroj (při offline konverzi) hodnotu v aplikaci nekontroluje oproti serveru, proto je nutné dbát na překlepy.
+
+**Q: Můžu stejný soubor importovat do Squash TM dvakrát?**  
+**A:** Nedoporučujeme to. Pokud potřebujete provést aktualizaci, je lepší upravit data přímo ve Squash TM, abyste předešli duplicitám a chybám typu `inconsistent`.
+
+**Q: Kdy použít API migraci a kdy Excel?**  
+**A:** API migrace je vhodná pro přenos celých struktur složek přímo z jednoho systému do druhého bez nutnosti cokoliv stahovat (zatím experimentální). Excel import se hodí pro jednorázové a kontrolované přenosy konkrétních testů.
+
+---
+
 ## 🔁 Verze
+
 
 | Verze | Hlavní změny |
 |-------|-------------|
